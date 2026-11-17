@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+		<title>Pro Sports League | Registration & Events Portal</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+		<style>
+			:root {
+				--sat: env(safe-area-inset-top, 0px);
+				--sab: env(safe-area-inset-bottom, 0px);
+				--sal: env(safe-area-inset-left, 0px);
+				--sar: env(safe-area-inset-right, 0px);
+			}
+			body {
+				padding-top: var(--sat);
+				padding-bottom: var(--sab);
+				padding-left: var(--sal);
+				padding-right: var(--sar);
+				-webkit-tap-highlight-color: transparent;
+			}
+
+			/* Ticker Animation */
+			@keyframes ticker {
+				0% {
+					transform: translateX(100%);
+				}
+				100% {
+					transform: translateX(-100%);
+				}
+			}
+			.ticker-text {
+				display: inline-block;
+				white-space: nowrap;
+				animation: ticker 25s linear infinite;
+			}
+
+			/* Hero Moving UI Animation */
+			@keyframes heroScroll {
+				0% {
+					transform: translateX(0);
+				}
+				100% {
+					transform: translateX(-50%);
+				}
+			}
+
+			.hero-moving-container {
+				position: absolute;
+				top: 0;
+				left: 0;
+				display: flex;
+				width: 400%;
+				height: 100%;
+				animation: heroScroll 30s linear infinite;
+				z-index: 0;
+			}
+
+			.hero-moving-container img {
+				width: 12.5%;
+				height: 100%;
+				object-fit: cover;
+				filter: brightness(0.4) contrast(1.1);
+			}
+
+			.hero-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: radial-gradient(
+					circle,
+					rgba(0, 0, 0, 0.2) 0%,
+					rgba(0, 0, 0, 0.6) 100%
+				);
+				z-index: 1;
+			}
+
+			.sport-card:hover img {
+				transform: scale(1.1);
+			}
+
+			/* Background Moving Images Animation (Lower Section) */
+			@keyframes scrollBackground {
+				0% {
+					transform: translateX(0);
+				}
+				100% {
+					transform: translateX(-50%);
+				}
+			}
+			.moving-bg-container {
+				display: flex;
+				width: 200%;
+				animation: scrollBackground 40s linear infinite;
+				position: absolute;
+				top: 0;
+				left: 0;
+				height: 100%;
+				z-index: 0;
+				opacity: 0.08;
+				filter: grayscale(100%);
+				pointer-events: none;
+			}
+			.moving-bg-container img {
+				width: 25%;
+				height: 100%;
+				object-fit: cover;
+			}
+
+			.relative-section {
+				position: relative;
+				overflow: hidden;
+			}
+
+			/* Floating Toast Slide-in */
+			@keyframes toastIn {
+				from { transform: translateX(110%); opacity: 0; }
+				to { transform: translateX(0); opacity: 1; }
+			}
+			.toast-slide-in {
+				animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+			}
+
+			/* Chatbase launcher bounce on load */
+			#chatbase-bubble,
+			.chatbase-bubble,
+			.chatbase-launcher,
+			iframe[src*="chatbase"] {
+				animation: bounce 1.8s infinite ease-in-out !important;
+			}
+
+			@keyframes bounce {
+				0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+				40% { transform: translateY(-10px); }
+				60% { transform: translateY(-5px); }
+			}
+		</style>
+	</head>
+	<body class="bg-white font-sans overflow-x-hidden text-gray-800">
+		<!-- Toast Notification Container -->
+		<div id="toastContainer" class="fixed top-5 right-5 z-[250] flex flex-col gap-2.5 pointer-events-none"></div>
+
+		<!-- Top News Ticker -->
+		<div
+			class="bg-yellow-500 text-black py-2 overflow-hidden border-b-2 border-black">
+			<div class="ticker-text font-bold uppercase tracking-widest text-xs md:text-sm">
+				🏆 National Championship registrations are now OPEN! • Register as an
+				Official for the upcoming Kabaddi League • Cricket Trials starting next
+				Monday • Last date for Athlete enrollment: 30th March! 🏆
+			</div>
+		</div>
+
+		<!-- Navigation -->
+		<nav class="bg-white shadow-lg sticky top-0 z-50">
+			<div
+				class="container mx-auto px-6 py-4 flex justify-between items-center">
+				<div onclick="returnToHome()" class="text-3xl font-black text-blue-900 italic cursor-pointer">
+					PRO<span class="text-yellow-600">SPORTS</span>
+				</div>
+				<div
+					class="hidden md:flex space-x-8 font-bold text-gray-700 items-center">
+					<a href="#publicEventsSection" onclick="scrollToPublicEvents(); return false;" class="hover:text-yellow-600">Events</a>
+					<a href="admin.html" target="_blank" class="hover:text-yellow-600 flex items-center gap-1 text-xs uppercase bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
+						<i class="fas fa-user-shield text-blue-900"></i> Admin Gateway
+					</a>
+
+					<div id="navAuthSection">
+						<div
+							id="loggedOutButtons"
+							class="flex shadow-sm rounded-full overflow-hidden border border-blue-900/20">
+							<button
+								onclick="openDirectLogin('Athlete')"
+								class="bg-blue-900 text-white px-6 py-2 hover:bg-blue-800 transition-all font-bold">
+								Athlete Login
+							</button>
+							<button
+								onclick="openDirectLogin('Official')"
+								class="bg-yellow-500 text-blue-900 px-6 py-2 hover:bg-yellow-400 transition-all font-bold border-l border-blue-900/30">
+								Official Login
+							</button>
+						</div>
+
+						<div id="loggedInProfile" class="hidden relative group">
+							<div class="flex items-center gap-2 cursor-pointer">
+								<div
+									class="w-11 h-11 bg-blue-900 border-2 border-yellow-500 rounded-full flex items-center justify-center text-white font-black text-xl hover:scale-105 transition-all shadow-md">
+									<span id="userInitialLetter">?</span>
+								</div>
+								<div class="hidden lg:block text-left">
+									<div id="navUserNameText" class="text-xs font-black text-blue-950 uppercase leading-none">User</div>
+									<div id="navUserStatusBadge" class="text-[10px] font-bold text-amber-500 uppercase mt-0.5">Pending</div>
+								</div>
+							</div>
+							<div
+								class="absolute right-0 top-full pt-2 w-56 hidden group-hover:block z-50">
+								<div
+									class="bg-white border shadow-2xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+									<div
+										class="px-4 py-3 border-b bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-widest">
+										Account
+									</div>
+									<button
+										onclick="openCurrentDashboard()"
+										class="w-full text-left px-4 py-3 text-blue-900 font-bold hover:bg-blue-50 flex items-center transition-colors text-xs">
+										<i class="fas fa-columns mr-3 text-yellow-600"></i> My Dashboard
+									</button>
+									<button
+										onclick="openStatusCheckModal()"
+										class="w-full text-left px-4 py-3 text-amber-700 font-bold hover:bg-amber-50 flex items-center transition-colors text-xs border-t">
+										<i class="fas fa-shield-alt mr-3 text-amber-500"></i> Verification Status
+									</button>
+									<button
+										onclick="handleLogout()"
+										class="w-full text-left px-4 py-3 text-red-600 font-bold hover:bg-red-50 flex items-center transition-colors text-xs border-t">
+										<i class="fas fa-sign-out-alt mr-3"></i> Logout
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Mobile Header Right Actions -->
+				<div class="flex md:hidden items-center gap-3">
+					<div id="mobileLoggedOutBtns" class="flex gap-1.5">
+						<button
+							onclick="openDirectLogin('Athlete')"
+							class="bg-blue-900 text-white px-3.5 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider">
+							Login
+						</button>
+					</div>
+					<div id="mobileLoggedInProfile" class="hidden">
+						<button
+							onclick="openCurrentDashboard()"
+							class="w-10 h-10 bg-blue-900 border-2 border-yellow-500 rounded-full flex items-center justify-center text-white font-black text-sm shadow">
+							<span id="mobileUserInitial">?</span>
+						</button>
+					</div>
+					<button
+						onclick="toggleMobileMenu()"
+						class="text-blue-900 p-2 text-xl hover:text-yellow-600 transition"
+						aria-label="Toggle navigation">
+						<i class="fas fa-bars"></i>
+					</button>
+				</div>
+			</div>
+		</nav>
+
+		<!-- Mobile Dropdown Navigation -->
+		<div id="mobileMenu" class="hidden md:hidden bg-blue-950 text-white px-6 py-4 border-b-2 border-yellow-500 shadow-2xl space-y-3">
+			<a href="#publicEventsSection" onclick="scrollToPublicEvents(); toggleMobileMenu(); return false;" class="flex items-center gap-2 font-bold hover:text-yellow-400 py-1 text-sm">
+				<i class="fas fa-home text-yellow-500 w-5"></i> Events & Home
+			</a>
+			<button onclick="openDirectLogin('Athlete'); toggleMobileMenu();" class="flex items-center gap-2 w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
+				<i class="fas fa-running text-yellow-500 w-5"></i> Athlete Portal
+			</button>
+			<button onclick="openDirectLogin('Official'); toggleMobileMenu();" class="flex items-center gap-2 w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
+				<i class="fas fa-clipboard-check text-yellow-500 w-5"></i> Official Portal
+			</button>
+			<a href="admin.html" target="_blank" class="flex items-center gap-2 font-bold hover:text-yellow-400 py-1 text-xs uppercase text-blue-200">
+				<i class="fas fa-user-shield text-yellow-500 w-5"></i> Admin Gateway
+			</a>
+		</div>
+
+		<!-- Hero Section -->
+		<header
+			class="relative h-[600px] flex items-center justify-center text-center text-white overflow-hidden">
+			<div class="hero-moving-container">
+				<img src="./assets/cricket.png" alt="cricket" />
+				<img src="./assets/image.png" alt="kabbadi" />
+				<img src="./assets/football.png" alt="football" />
+				<img src="./assets/athletics.png" alt="athletics" />
+				<img src="./assets/cricket.png" alt="cricket" />
+				<img src="./assets/football.png" alt="football" />
+				<img src="./assets/image.png" alt="kabaddi" />
+				<img
+					src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1000&q=80"
+					alt="athletics" />
+			</div>
+
+			<div class="hero-overlay"></div>
+
+			<div class="z-20 px-4">
+				<h1
+					class="text-6xl md:text-8xl font-black mb-4 uppercase italic tracking-tighter drop-shadow-2xl">
+					Rise to the Challenge
+				</h1>
+				<p
+					class="text-xl md:text-2xl mb-10 font-bold tracking-widest uppercase text-yellow-500 drop-shadow-md">
+					Elite Performance. Professional Standards.
+				</p>
+				<div class="flex flex-col md:flex-row justify-center gap-6">
+					<a
+						href="#register"
+						onclick="
+							openMarathonDashboard();
+							event.preventDefault();
+						"
+						class="bg-yellow-500 text-blue-900 text-xl px-12 py-5 rounded-lg font-black hover:bg-white hover:scale-105 transition-all transform flex items-center justify-center shadow-lg">
+						<i class="fas fa-running mr-3"></i> MARATHON
+					</a>
+					<a
+						href="#publicEventsSection"
+						id="heroSportsBtn"
+						onclick="handleHeroSportsClick(event)"
+						class="bg-yellow-500 backdrop-blur-md border-white text-blue-900 text-xl px-12 py-5 rounded-lg font-black hover:bg-white hover:text-blue-900 hover:scale-105 transition-all transform flex items-center justify-center shadow-lg">
+						<i class="fas fa-basketball mr-3"></i> SPORTS
+					</a>
+				</div>
+			</div>
+		</header>
+
+		<!-- ================= PUBLIC SPORTS EVENTS SECTION (NO LOGIN REQUIRED) ================= -->
+		<section id="publicEventsSection" class="py-16 px-4 md:px-8 bg-slate-50 border-b border-gray-200">
+			<div class="container mx-auto max-w-7xl">
+				<!-- Section Header -->
+				<div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+					<div>
+						<span class="bg-yellow-500/15 text-yellow-800 border border-yellow-500/30 text-[11px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-full inline-flex items-center gap-1.5 shadow-sm">
+							<i class="fas fa-trophy text-yellow-600"></i> Official League Calendar
+						</span>
+						<h2 class="text-3xl md:text-5xl font-black text-blue-950 uppercase italic tracking-tighter mt-3">
+							Upcoming Sports Events & Tournaments
+						</h2>
+						<p class="text-sm text-gray-500 font-semibold mt-1.5 max-w-2xl">
+							Explore upcoming championships, open trials, and league matches. Publicly open for viewing, event details exploration, and athlete registration.
+						</p>
+					</div>
+
+					<!-- Search Box -->
+					<div class="relative w-full sm:w-72">
+						<i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+						<input
+							type="search"
+							name="events_search_query"
+							id="publicEventSearchInput"
+							oninput="handlePublicEventSearch(this.value)"
+							placeholder="Search by event, sport, or venue..."
+							autocomplete="off"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
+							data-lpignore="true"
+							data-form-type="other"
+							class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-900 shadow-sm" />
+					</div>
+				</div>
+
+				<!-- Discipline Filter Tabs -->
+				<div class="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
+					<button data-sport="all" onclick="filterPublicEventsBySport('all')" class="public-sport-tab active px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition bg-blue-900 text-white shadow-sm flex items-center gap-2">
+						<i class="fas fa-layer-group text-yellow-400"></i> All Events
+					</button>
+					<button data-sport="Cricket" onclick="filterPublicEventsBySport('Cricket')" class="public-sport-tab px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition bg-white text-gray-700 border border-gray-200 hover:border-blue-900 flex items-center gap-2">
+						<i class="fas fa-baseball-ball text-yellow-600"></i> Cricket
+					</button>
+					<button data-sport="Football" onclick="filterPublicEventsBySport('Football')" class="public-sport-tab px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition bg-white text-gray-700 border border-gray-200 hover:border-blue-900 flex items-center gap-2">
+						<i class="fas fa-futbol text-red-600" style="color: #ef4444;"></i> Football
+					</button>
+					<button data-sport="Kabaddi" onclick="filterPublicEventsBySport('Kabaddi')" class="public-sport-tab px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition bg-white text-gray-700 border border-gray-200 hover:border-blue-900 flex items-center gap-2">
+						<i class="fas fa-users text-amber-600"></i> Kabaddi
+					</button>
+					<button data-sport="Track" onclick="filterPublicEventsBySport('Track')" class="public-sport-tab px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition bg-white text-gray-700 border border-gray-200 hover:border-blue-900 flex items-center gap-2">
+						<i class="fas fa-running text-emerald-600"></i> Track & Field
+					</button>
+				</div>
+
+				<!-- Public Events Grid -->
+				<div id="publicEventsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+					<div class="col-span-full py-16 text-center text-gray-400 font-bold">
+						<i class="fas fa-spinner fa-spin text-3xl text-yellow-500 mb-3"></i>
+						<p>Loading live sports events...</p>
+					</div>
+				</div>
+
+				<!-- Empty State -->
+				<div id="noPublicEventsMsg" class="hidden py-24 text-center bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+					<div class="w-16 h-16 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
+						<i class="fas fa-calendar-times text-yellow-600"></i>
+					</div>
+					<h3 class="text-xl font-black text-blue-900 uppercase italic">No Events Found</h3>
+					<p class="text-xs text-gray-400 font-bold mt-1">There are no sports events currently matching your search criteria.</p>
+					<button onclick="filterPublicEventsBySport('all')" class="mt-4 bg-yellow-500 hover:bg-yellow-400 text-blue-950 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider">
+						Show All Events
+					</button>
+				</div>
+			</div>
+		</section>
+
+		<!-- ================= ATHLETE SPORTS DASHBOARD ================= -->
+		<div id="sportsDashboard" class="hidden min-h-screen bg-gray-50 py-12 px-6">
+			<div class="container mx-auto">
+				<div
+					class="flex flex-col md:flex-row items-center justify-between mb-12 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+					<div class="flex items-center space-x-6">
+						<div
+							class="w-24 h-24 bg-blue-900 border-4 border-yellow-500 rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg">
+							<span id="dashUserInitial">?</span>
+						</div>
+						<div>
+							<h1
+								id="dashUserName"
+								class="text-3xl font-black text-blue-900 uppercase italic">
+								Loading Profile...
+							</h1>
+							<p
+								id="dashRoleSubtitle"
+								class="text-gray-400 font-bold uppercase tracking-widest text-sm">
+								Pro Sports Athlete
+							</p>
+						</div>
+					</div>
+
+					<div class="mt-6 md:mt-0 relative group">
+						<i
+							class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-900"></i>
+						<input
+							type="search"
+							name="athlete_dash_search"
+							id="dashSearch"
+							placeholder="Search your sports..."
+							autocomplete="off"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
+							data-lpignore="true"
+							data-form-type="other"
+							class="pl-12 pr-4 py-3 bg-gray-100 rounded-full outline-none w-64 focus:w-80 focus:bg-white focus:ring-2 focus:ring-blue-900 transition-all duration-300 font-bold text-sm" />
+					</div>
+				</div>
+
+				<h2
+					class="text-2xl font-black text-blue-900 mb-8 uppercase italic tracking-tighter">
+					My Disciplines
+				</h2>
+
+				<div id="dashboardContent">
+					<div
+						id="dashSportsList"
+						class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+						<div
+							onclick="showTournaments('Cricket')"
+							class="dash-card group relative overflow-hidden rounded-2xl h-64 cursor-pointer bg-blue-900">
+							<img
+								src="./assets/cricket.png"
+								class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
+							<h3
+								class="absolute bottom-6 left-6 text-white text-2xl font-black italic uppercase">
+								Cricket
+							</h3>
+						</div>
+						<div
+							onclick="showTournaments('Football')"
+							class="dash-card group relative overflow-hidden rounded-2xl h-64 cursor-pointer bg-blue-900">
+							<img
+								src="./assets/ronaldo.png"
+								class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
+							<h3
+								class="absolute bottom-6 left-6 text-white text-2xl font-black italic uppercase">
+								Football
+							</h3>
+						</div>
+						<div
+							onclick="showTournaments('Kabaddi')"
+							class="dash-card group relative overflow-hidden rounded-2xl h-64 cursor-pointer bg-blue-900">
+							<img
+								src="./assets/image.png"
+								class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
+							<h3
+								class="absolute bottom-6 left-6 text-white text-2xl font-black italic uppercase">
+								Kabaddi
+							</h3>
+						</div>
+						<div
+							onclick="showTournaments('Track & Field')"
+							class="dash-card group relative overflow-hidden rounded-2xl h-64 cursor-pointer bg-blue-900">
+							<img
+								src="./assets/athletics.png"
+								class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
+							<h3
+								class="absolute bottom-6 left-6 text-white text-2xl font-black italic uppercase">
+								Track & Field
+							</h3>
+						</div>
+					</div>
+
+					<div id="tournamentListView" class="hidden mt-8">
+						<div class="flex items-center justify-between mb-6">
+							<h2
+								id="selectedSportTitle"
+								class="text-3xl font-black text-blue-900 uppercase italic"></h2>
+							<button
+								onclick="backToSports()"
+								class="text-blue-900 font-bold hover:underline">
+								← All Sports
+							</button>
+						</div>
+						<div id="tournamentGrid" class="grid grid-cols-1 gap-4"></div>
+						<div id="noTournamentMsg" class="hidden py-20 text-center">
+							<p
+								class="text-2xl font-black text-gray-300 uppercase italic tracking-tighter">
+								NO TOURNAMENTS FOR THIS DISCIPLINE FOUND
+							</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="mt-12 text-center">
+					<button
+						onclick="returnToHome()"
+						class="text-blue-900 font-bold uppercase tracking-widest hover:text-yellow-500 transition-colors">
+						← Back to Main Home
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= OFFICIALS DASHBOARD (#officialsDashboard) ================= -->
+		<div id="officialsDashboard" class="hidden min-h-screen bg-gray-50 py-10 px-4 md:px-8">
+			<div class="container mx-auto max-w-6xl">
+				<!-- Welcome Banner for Officials -->
+				<div class="bg-blue-900 text-white p-6 md:p-8 rounded-3xl shadow-xl border-b-4 border-yellow-500 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+					<div class="flex items-center space-x-6">
+						<div class="w-20 h-20 bg-yellow-500 text-blue-900 rounded-full flex items-center justify-center font-black text-3xl shadow-lg border-2 border-white">
+							<span id="officialInitial">?</span>
+						</div>
+						<div>
+							<div class="flex items-center gap-3">
+								<span class="bg-yellow-500 text-blue-950 font-black text-[10px] uppercase tracking-widest px-3 py-1 rounded-full">
+									Official Portal
+								</span>
+								<span class="text-xs text-yellow-400 font-bold uppercase tracking-wider">
+									Verified Official
+								</span>
+							</div>
+							<h1 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter mt-1">
+								Welcome Official <span id="officialWelcomeName">Official</span>
+							</h1>
+							<p class="text-blue-200 text-xs font-semibold mt-0.5">
+								Tournament Command Center • Official ID: <span id="officialIdBadge" class="font-mono text-white font-bold">OFF-0000</span>
+							</p>
+						</div>
+					</div>
+
+					<div class="flex items-center gap-3">
+						<button
+							onclick="returnToHome()"
+							class="bg-blue-950 hover:bg-black text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition border border-blue-700 flex items-center gap-2">
+							<i class="fas fa-home"></i> Home
+						</button>
+						<button
+							onclick="handleLogout()"
+							class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+							<i class="fas fa-sign-out-alt"></i> Logout
+						</button>
+					</div>
+				</div>
+
+				<!-- Toggle / Tab Menu: All Events & Hosted Events beside each other -->
+				<div class="flex flex-wrap items-center gap-3 mb-8 border-b border-gray-200 pb-4">
+					<button
+						id="tabBtnAllEvents"
+						onclick="switchOfficialTab('all')"
+						class="official-tab-btn bg-white text-gray-700 border border-gray-200 hover:border-blue-900 hover:text-blue-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-sm flex items-center gap-2">
+						<i class="fas fa-globe text-yellow-600"></i> All Events (<span id="allEventsCount">0</span>)
+					</button>
+					<button
+						id="tabBtnHostedEvents"
+						onclick="switchOfficialTab('hosted')"
+						class="official-tab-btn active bg-blue-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+						<i class="fas fa-trophy text-yellow-400"></i> Hosted Events (<span id="hostedEventsCount">0</span>)
+					</button>
+					<button
+						id="tabBtnCreateEvent"
+						onclick="switchOfficialTab('create')"
+						class="official-tab-btn bg-white text-gray-700 border border-gray-200 hover:border-blue-900 hover:text-blue-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-sm flex items-center gap-2">
+						<i class="fas fa-plus-circle text-yellow-600"></i> Create New Event
+					</button>
+				</div>
+
+				<!-- TAB 1: All Events View (Browse other officials' events) -->
+				<div id="allEventsTabContent" class="hidden">
+					<div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+						<div>
+							<span class="bg-blue-50 text-blue-900 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-blue-200">
+								League Directory
+							</span>
+							<h3 class="text-xl font-black text-blue-950 uppercase italic tracking-tight mt-1.5">All League Tournaments & Events</h3>
+							<p class="text-xs text-gray-500 font-semibold mt-0.5">Explore events created by fellow league officials. (Officials view only - competitor registration restricted).</p>
+						</div>
+						<div class="relative w-full sm:w-64">
+							<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+							<input
+								type="search"
+								name="official_league_search"
+								id="officialAllEventsSearch"
+								oninput="filterOfficialAllEvents(this.value)"
+								placeholder="Search all events..."
+								autocomplete="off"
+								autocorrect="off"
+								autocapitalize="off"
+								spellcheck="false"
+								data-lpignore="true"
+								data-form-type="other"
+								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-900" />
+						</div>
+					</div>
+
+					<div id="officialAllEventsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						<!-- Populated via script -->
+					</div>
+
+					<!-- Empty State for All Events -->
+					<div id="noOfficialAllEventsMsg" class="hidden py-20 text-center bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+						<div class="w-16 h-16 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
+							<i class="fas fa-globe text-yellow-500"></i>
+						</div>
+						<h3 class="text-xl font-black text-blue-900 uppercase italic">No Events Found</h3>
+						<p class="text-xs text-gray-400 font-bold mt-1">There are currently no events matching your search.</p>
+					</div>
+				</div>
+
+				<!-- TAB 2: My Hosted Events View -->
+				<div id="hostedEventsTabContent">
+					<div id="officialEventsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						<!-- Populated via JavaScript -->
+					</div>
+
+					<!-- Empty State -->
+					<div id="noHostedEventsMsg" class="hidden py-20 text-center bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+						<div class="w-16 h-16 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
+							<i class="fas fa-clipboard-list"></i>
+						</div>
+						<h3 class="text-xl font-black text-blue-900 uppercase italic">No Events Hosted Yet</h3>
+						<p class="text-xs text-gray-400 font-bold mt-1 max-w-md mx-auto">
+							You haven't created any tournaments yet. Switch to "Create New Event" to launch your first tournament with custom registration fields!
+						</p>
+						<button onclick="switchOfficialTab('create')" class="mt-5 bg-yellow-500 hover:bg-yellow-400 text-blue-950 px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md">
+							+ Create Tournament Now
+						</button>
+					</div>
+				</div>
+
+				<!-- TAB 2: Event Creation Wizard -->
+				<div id="createEventTabContent" class="hidden">
+					<div class="bg-white p-6 md:p-10 rounded-3xl shadow-xl border border-gray-200 max-w-3xl mx-auto">
+						<div class="border-b pb-5 mb-6">
+							<span class="bg-yellow-100 text-yellow-800 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+								Event Creation Wizard
+							</span>
+							<h2 class="text-2xl font-black text-blue-900 uppercase italic tracking-tight mt-2">
+								Host a New Sports Tournament
+							</h2>
+							<p class="text-xs text-gray-400 font-semibold mt-1">
+								Enter the official event details and configure custom requirements for participating athletes.
+							</p>
+						</div>
+
+						<form id="createEventForm" onsubmit="handleCreateEventSubmit(event)" class="space-y-6">
+							<!-- Basic Details -->
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+								<div class="md:col-span-2">
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Event / Tournament Name *
+									</label>
+									<input
+										type="text"
+										id="evName"
+										required
+										placeholder="e.g. National Inter-State Kabaddi Cup"
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition" />
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Sport Discipline *
+									</label>
+									<select
+										id="evSport"
+										required
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition">
+										<option value="Cricket">Cricket</option>
+										<option value="Football">Football</option>
+										<option value="Kabaddi">Kabaddi</option>
+										<option value="Track">Track & Field</option>
+									</select>
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Event Date *
+									</label>
+									<input
+										type="date"
+										id="evDate"
+										required
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition" />
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Location / Venue *
+									</label>
+									<input
+										type="text"
+										id="evLocation"
+										required
+										placeholder="e.g. City Sports Complex"
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition" />
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Max Capacity (Athletes/Teams) *
+									</label>
+									<input
+										type="number"
+										id="evCapacity"
+										required
+										min="1"
+										placeholder="e.g. 50"
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition" />
+								</div>
+							</div>
+
+							<!-- Dynamic Form Builder Integration -->
+							<div class="mt-8 pt-6 border-t border-gray-200">
+								<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+									<div>
+										<h3 class="text-sm font-black text-blue-900 uppercase tracking-tight flex items-center gap-2">
+											<i class="fas fa-sliders-h text-yellow-600"></i> Custom Registration Fields
+										</h3>
+										<p class="text-[11px] text-gray-500 font-semibold mt-0.5">
+											Specify custom inputs athletes will fill out (e.g., "Jersey Size", "Medical Clearance", "Weight Class").
+										</p>
+									</div>
+									<button
+										type="button"
+										onclick="addCustomFieldRow()"
+										class="bg-blue-900 hover:bg-yellow-500 hover:text-blue-950 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap">
+										<i class="fas fa-plus"></i> Add Field
+									</button>
+								</div>
+
+								<div id="customFieldsContainer" class="space-y-3">
+									<!-- Injected dynamically by Vanilla JS -->
+								</div>
+							</div>
+
+							<div class="pt-6 border-t border-gray-200 flex justify-end gap-3">
+								<button
+									type="button"
+									onclick="switchOfficialTab('hosted')"
+									class="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-500 hover:text-blue-900 transition">
+									Cancel
+								</button>
+								<button
+									type="submit"
+									id="btnPublishEvent"
+									class="bg-yellow-500 hover:bg-yellow-400 text-blue-950 px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-yellow-500/30 transition-all flex items-center gap-2">
+									<i class="fas fa-paper-plane"></i> Publish Event
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= OFFICIAL VIEW REGISTRATIONS MODAL ================= -->
+		<div id="officialRegistrationsModal" class="hidden fixed inset-0 z-[120] flex items-center justify-center bg-blue-950/75 backdrop-blur-md p-4">
+			<div class="bg-white rounded-3xl max-w-5xl w-full shadow-2xl relative overflow-hidden border border-gray-200 max-h-[92vh] flex flex-col">
+				<!-- Header -->
+				<div class="bg-blue-900 p-6 text-white flex justify-between items-start">
+					<div>
+						<div class="flex items-center gap-3">
+							<span id="modalEventSportBadge" class="bg-yellow-500 text-blue-950 text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full">Sport</span>
+							<span id="modalEventCapacityBadge" class="text-xs text-yellow-400 font-mono font-bold">0 / 0 Registered</span>
+							<span class="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-emerald-400/30">Official Roster</span>
+						</div>
+						<h3 id="modalEventTitle" class="text-2xl font-black uppercase italic tracking-tighter mt-1 text-white">Event Name</h3>
+						<p id="modalEventDetails" class="text-xs text-blue-200 mt-1 font-semibold">Date & Location</p>
+					</div>
+					<button onclick="closeOfficialRegistrationsModal()" class="text-white/60 hover:text-white text-3xl font-bold transition">&times;</button>
+				</div>
+
+				<!-- Stats & Filter Toolbar -->
+				<div class="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+					<div class="flex items-center gap-2 overflow-x-auto pb-1">
+						<button onclick="filterRegistrationsByStatus('all')" id="regFilterAll" class="reg-filter-btn px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-900 text-white transition shadow-sm">
+							All (<span id="countRegAll">0</span>)
+						</button>
+						<button onclick="filterRegistrationsByStatus('Pending')" id="regFilterPending" class="reg-filter-btn px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-white text-amber-800 border border-amber-300 hover:bg-amber-50 transition">
+							🟡 Pending (<span id="countRegPending">0</span>)
+						</button>
+						<button onclick="filterRegistrationsByStatus('Approved')" id="regFilterApproved" class="reg-filter-btn px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 transition">
+							🟢 Approved (<span id="countRegApproved">0</span>)
+						</button>
+						<button onclick="filterRegistrationsByStatus('Rejected')" id="regFilterRejected" class="reg-filter-btn px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-white text-rose-800 border border-rose-300 hover:bg-rose-50 transition">
+							🔴 Rejected (<span id="countRegRejected">0</span>)
+						</button>
+					</div>
+
+					<button
+						onclick="exportCurrentEventCSV()"
+						class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 whitespace-nowrap">
+						<i class="fas fa-file-csv text-base"></i> Export CSV Roster
+					</button>
+				</div>
+
+				<!-- Table Body -->
+				<div class="p-6 overflow-y-auto flex-1">
+					<div class="overflow-x-auto">
+						<table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+							<thead>
+								<tr class="border-b border-gray-200 text-[11px] font-black uppercase tracking-wider text-gray-500 bg-gray-50">
+									<th class="py-3 px-4">Athlete Name</th>
+									<th class="py-3 px-4">Email Address</th>
+									<th class="py-3 px-4">Mobile Number</th>
+									<th class="py-3 px-4">Age / DOB</th>
+									<th class="py-3 px-4">Gender</th>
+									<th class="py-3 px-4">Sport</th>
+									<th class="py-3 px-4">Team / Club</th>
+									<th class="py-3 px-4">Experience</th>
+									<th class="py-3 px-4">Registered Date</th>
+									<th class="py-3 px-4 text-center">Status</th>
+									<th class="py-3 px-4 text-right">Details</th>
+								</tr>
+							</thead>
+							<tbody id="modalAthletesTableBody" class="divide-y divide-gray-100">
+								<!-- Populated via script -->
+							</tbody>
+						</table>
+					</div>
+
+					<div id="modalNoAthletesMsg" class="hidden py-16 text-center text-gray-400 font-bold">
+						<i class="fas fa-user-friends text-3xl mb-2 text-gray-300"></i>
+						<p>No athlete registrations found matching this filter.</p>
+					</div>
+				</div>
+
+				<!-- Modal Footer -->
+				<div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+					<p class="text-[11px] text-gray-400 font-semibold italic">Only you (the event host) have authorization to view this roster.</p>
+					<button onclick="closeOfficialRegistrationsModal()" class="bg-gray-200 hover:bg-gray-300 text-blue-900 font-black text-xs uppercase tracking-wider px-6 py-2.5 rounded-xl transition">
+						Close
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Backwards-compatibility alias container -->
+		<div id="manageEventModal" class="hidden"></div>
+
+		<!-- ================= SINGLE ATHLETE DETAILS MODAL ================= -->
+		<div id="singleAthleteDetailModal" class="hidden fixed inset-0 z-[140] flex items-center justify-center bg-blue-950/80 backdrop-blur-md p-4">
+			<div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl relative overflow-hidden border border-gray-200 animate-in fade-in duration-150">
+				<div class="bg-blue-900 p-6 text-white flex justify-between items-center">
+					<div>
+						<span class="bg-yellow-500 text-blue-950 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Athlete Profile</span>
+						<h3 id="singleAthName" class="text-2xl font-black uppercase italic mt-1">Athlete Name</h3>
+					</div>
+					<button onclick="closeSingleAthleteDetailModal()" class="text-white/60 hover:text-white text-3xl font-bold">&times;</button>
+				</div>
+
+				<div class="p-6 max-h-[70vh] overflow-y-auto space-y-4 text-xs">
+					<div class="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">ID Number:</span> <span id="singleAthId" class="font-mono font-bold text-blue-900 text-sm">ATH-0000</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Status:</span> <span id="singleAthStatus" class="font-black text-sm">Pending</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Email:</span> <span id="singleAthEmail" class="font-bold text-gray-700">user@example.com</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Mobile:</span> <span id="singleAthMobile" class="font-bold text-gray-700">9876543210</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Age / DOB:</span> <span id="singleAthDob" class="font-bold text-gray-700">2000-01-01</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Gender:</span> <span id="singleAthGender" class="font-bold text-gray-700">Male</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Sport:</span> <span id="singleAthSport" class="font-bold text-gray-700">Cricket</span></div>
+						<div><span class="text-gray-400 font-bold block uppercase text-[10px]">Team / Club:</span> <span id="singleAthTeam" class="font-bold text-gray-700">Apex Warriors</span></div>
+						<div class="col-span-2"><span class="text-gray-400 font-bold block uppercase text-[10px]">Experience Level:</span> <span id="singleAthExp" class="font-bold text-gray-700">Advanced</span></div>
+					</div>
+
+					<div id="singleAthAdditionalBox" class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+						<span class="text-blue-900 font-black block uppercase text-[10px] mb-1">Additional Information / Bio:</span>
+						<p id="singleAthAdditional" class="text-gray-700 leading-relaxed font-medium">None provided.</p>
+					</div>
+
+					<div id="singleAthCustomAnswersBox" class="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-200">
+						<span class="text-yellow-800 font-black block uppercase text-[10px] mb-2">Event-Specific Custom Answers:</span>
+						<div id="singleAthCustomAnswersList" class="space-y-1.5 font-medium"></div>
+					</div>
+				</div>
+
+				<div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+					<button onclick="closeSingleAthleteDetailModal()" class="bg-blue-900 hover:bg-blue-950 text-white font-black text-xs uppercase px-6 py-2.5 rounded-xl transition">
+						Done
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= PUBLIC COMPLETE EVENT DETAILS MODAL (PUBLIC VIEWING) ================= -->
+		<div id="publicEventDetailsModal" class="hidden fixed inset-0 z-[130] flex items-center justify-center bg-blue-950/80 backdrop-blur-md p-4">
+			<div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl relative overflow-hidden border border-gray-200 max-h-[90vh] flex flex-col animate-in fade-in duration-150">
+				<!-- High-Res Sport Banner -->
+				<div class="relative h-48 bg-blue-950 overflow-hidden">
+					<img id="detailModalImage" src="./assets/cricket.png" alt="Sport Banner" class="w-full h-full object-cover opacity-80" />
+					<div class="absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/40 to-transparent"></div>
+					<button onclick="closePublicEventDetailsModal()" class="absolute top-4 right-4 text-white/70 hover:text-white text-3xl font-bold bg-black/40 hover:bg-black/70 w-10 h-10 rounded-full flex items-center justify-center transition">&times;</button>
+					<div class="absolute bottom-4 left-6 right-6">
+						<div class="flex items-center gap-2 mb-1.5">
+							<span id="detailModalSportBadge" class="bg-yellow-500 text-blue-950 text-[10px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full shadow-sm">Cricket</span>
+							<span id="detailModalStatusBadge" class="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full shadow-sm">Open</span>
+						</div>
+						<h3 id="detailModalName" class="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tight drop-shadow-md">Event Name</h3>
+					</div>
+				</div>
+
+				<!-- Event Information Body -->
+				<div class="p-6 md:p-8 overflow-y-auto flex-1 space-y-6 text-xs">
+					<!-- Key Event Specs Grid -->
+					<div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+						<div>
+							<span class="text-gray-400 font-bold block uppercase text-[10px]">Date</span>
+							<span id="detailModalDate" class="font-black text-blue-950 text-sm mt-0.5 block">April 15, 2026</span>
+						</div>
+						<div>
+							<span class="text-gray-400 font-bold block uppercase text-[10px]">Time</span>
+							<span id="detailModalTime" class="font-black text-blue-950 text-sm mt-0.5 block">10:00 AM</span>
+						</div>
+						<div>
+							<span class="text-gray-400 font-bold block uppercase text-[10px]">Location</span>
+							<span id="detailModalLocation" class="font-black text-blue-950 text-sm mt-0.5 block truncate">Apex Stadium</span>
+						</div>
+						<div>
+							<span class="text-gray-400 font-bold block uppercase text-[10px]">Capacity</span>
+							<span id="detailModalCapacity" class="font-black text-blue-950 text-sm mt-0.5 block">3 / 40 Registered</span>
+						</div>
+					</div>
+
+					<!-- Description -->
+					<div>
+						<h4 class="text-sm font-black text-blue-950 uppercase tracking-tight mb-1 flex items-center gap-2">
+							<i class="fas fa-align-left text-yellow-600"></i> Event Overview & Description
+						</h4>
+						<p id="detailModalDescription" class="text-gray-600 leading-relaxed font-medium bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-xs md:text-sm">
+							Full event description will appear here.
+						</p>
+					</div>
+
+					<!-- Eligibility -->
+					<div>
+						<h4 class="text-sm font-black text-blue-950 uppercase tracking-tight mb-1 flex items-center gap-2">
+							<i class="fas fa-check-circle text-emerald-600"></i> Eligibility Criteria
+						</h4>
+						<p id="detailModalEligibility" class="text-gray-600 leading-relaxed font-medium bg-emerald-50/40 p-4 rounded-xl border border-emerald-100 text-xs">
+							Open to all verified athletes aged 16-35. Must present valid athlete ID credentials at venue.
+						</p>
+					</div>
+
+					<!-- Official Host Info -->
+					<div class="flex items-center justify-between p-4 bg-blue-50/60 rounded-2xl border border-blue-100">
+						<div class="flex items-center gap-3">
+							<div class="w-10 h-10 bg-blue-900 text-yellow-400 rounded-full flex items-center justify-center font-black">
+								<i class="fas fa-user-shield"></i>
+							</div>
+							<div>
+								<span class="text-[10px] text-gray-400 font-bold uppercase block">Organized By Official</span>
+								<span id="detailModalOrganizer" class="font-black text-blue-950 text-xs">Vikram Singh (OFF-3105)</span>
+							</div>
+						</div>
+						<div id="detailModalCustomBadge" class="hidden">
+							<span class="bg-yellow-100 text-yellow-800 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">Custom Form Fields</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Modal Actions Footer -->
+				<div class="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+					<button onclick="closePublicEventDetailsModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-black text-xs uppercase px-5 py-3 rounded-xl transition">
+						Close
+					</button>
+
+					<button
+						id="detailModalRegisterBtn"
+						onclick="handlePublicEventRegisterFromModal()"
+						class="bg-yellow-500 hover:bg-yellow-400 text-blue-950 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2">
+						<i class="fas fa-file-signature"></i> Register for Event
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= ATHLETE EVENT REGISTRATION FORM MODAL ================= -->
+		<div id="athleteEventRegisterModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center bg-blue-950/85 backdrop-blur-md p-4">
+			<div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl relative overflow-hidden border border-gray-200 max-h-[92vh] flex flex-col animate-in fade-in duration-200">
+				<!-- Header -->
+				<div class="bg-blue-900 p-6 text-white flex justify-between items-start">
+					<div>
+						<span class="bg-yellow-500 text-blue-950 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">
+							Official Athlete Enrollment
+						</span>
+						<h3 class="text-2xl font-black uppercase italic tracking-tight mt-1 text-white">Event Registration Form</h3>
+						<p id="athRegEventSub" class="text-xs text-yellow-400 mt-1 font-bold">Registering for: <span id="athRegEventName" class="text-white">Tournament Name</span></p>
+					</div>
+					<button onclick="closeAthleteEventRegisterModal()" class="text-white/60 hover:text-white text-3xl font-bold transition">&times;</button>
+				</div>
+
+				<!-- Form Content -->
+				<form id="athleteEventRegisterForm" onsubmit="submitAthleteEventRegistration(event)" class="p-6 md:p-8 overflow-y-auto flex-1 space-y-5 text-xs">
+					<!-- Error banner if validation fails -->
+					<div id="athRegErrorBanner" class="hidden p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl font-bold text-xs"></div>
+
+					<!-- Notice -->
+					<div class="bg-blue-50/70 border border-blue-100 p-3.5 rounded-xl text-blue-950 flex items-center gap-3">
+						<i class="fas fa-info-circle text-blue-900 text-lg"></i>
+						<p class="font-medium">Profile details have been auto-populated. You may review and update any information before submission.</p>
+					</div>
+
+					<!-- Core 9 Fields Grid -->
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<!-- 1. Full Name -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">1. Full Name *</label>
+							<input
+								type="text"
+								id="athRegFullName"
+								required
+								placeholder="e.g. Rahul Sharma"
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+
+						<!-- 2. Email Address -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">2. Email Address *</label>
+							<input
+								type="email"
+								id="athRegEmail"
+								required
+								placeholder="e.g. rahul@example.com"
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+
+						<!-- 3. Mobile Number -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">3. Mobile Number *</label>
+							<input
+								type="tel"
+								id="athRegMobile"
+								required
+								placeholder="e.g. 9876543210 (10 digits)"
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+
+						<!-- 4. Date of Birth / Age -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">4. Date of Birth / Age *</label>
+							<input
+								type="text"
+								id="athRegDob"
+								required
+								placeholder="e.g. 2000-05-15 or 24"
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+
+						<!-- 5. Gender -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">5. Gender *</label>
+							<select
+								id="athRegGender"
+								required
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">Select Gender</option>
+								<option value="Male">Male</option>
+								<option value="Female">Female</option>
+								<option value="Other">Other</option>
+								<option value="Prefer not to say">Prefer not to say</option>
+							</select>
+						</div>
+
+						<!-- 6. Sport -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">6. Sport *</label>
+							<input
+								type="text"
+								id="athRegSport"
+								required
+								class="w-full p-3 bg-gray-100 border border-gray-200 rounded-xl font-bold text-xs outline-none text-gray-800" />
+						</div>
+
+						<!-- 7. Team / Club Name -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">7. Team / Club Name</label>
+							<input
+								type="text"
+								id="athRegTeam"
+								placeholder="e.g. City Warriors Club"
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+
+						<!-- 8. Experience Level -->
+						<div>
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">8. Experience Level *</label>
+							<select
+								id="athRegExperience"
+								required
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">Select Level</option>
+								<option value="Beginner">Beginner (1-2 Years)</option>
+								<option value="Intermediate">Intermediate (3-4 Years)</option>
+								<option value="Advanced">Advanced (5+ Years / State)</option>
+								<option value="Professional">Professional (National / Certified)</option>
+							</select>
+						</div>
+
+						<!-- 9. Additional Information -->
+						<div class="md:col-span-2">
+							<label class="block font-black uppercase text-gray-700 mb-1 text-[11px]">9. Additional Information</label>
+							<textarea
+								id="athRegAdditional"
+								rows="2"
+								placeholder="List past tournament achievements, medical notes, or emergency contacts..."
+								class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-xs outline-none focus:ring-2 focus:ring-blue-900 transition"></textarea>
+						</div>
+					</div>
+
+					<!-- Dynamic Event-Specific Fields Container -->
+					<div id="athRegCustomContainer" class="hidden pt-4 border-t border-gray-200 space-y-4">
+						<h4 class="text-xs font-black text-blue-900 uppercase tracking-tight flex items-center gap-2">
+							<i class="fas fa-sliders-h text-yellow-600"></i> Event-Specific Questions
+						</h4>
+						<div id="athRegCustomFieldsList" class="space-y-3">
+							<!-- Injected dynamically -->
+						</div>
+					</div>
+
+					<!-- Action Buttons -->
+					<div class="pt-6 border-t border-gray-200 flex justify-end items-center gap-3">
+						<button
+							type="button"
+							onclick="closeAthleteEventRegisterModal()"
+							class="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-500 hover:text-blue-900 transition">
+							Cancel
+						</button>
+						<button
+							type="submit"
+							id="athRegSubmitBtn"
+							class="bg-yellow-500 hover:bg-yellow-400 text-blue-950 px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-yellow-500/30 transition-all flex items-center gap-2">
+							<i class="fas fa-check-circle"></i> Submit Registration
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+
+		<!-- Disciplines Section -->
+		<section id="register" class="relative-section py-20 px-6 bg-white">
+			<div class="moving-bg-container">
+				<img
+					src="https://images.unsplash.com/photo-1531415074968-036ba1b565da?auto=format&fit=crop&w=800&q=60"
+					alt="bg1" />
+				<img
+					src="https://images.unsplash.com/photo-1628771065518-0d82f1938462?auto=format&fit=crop&w=800&q=60"
+					alt="bg2" />
+				<img
+					src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=60"
+					alt="bg3" />
+				<img
+					src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=60"
+					alt="bg4" />
+			</div>
+
+			<div class="container mx-auto relative z-10">
+				<div class="text-center mb-16">
+					<h2
+						class="text-4xl font-black text-blue-900 uppercase tracking-tighter">
+						Select Your Discipline
+					</h2>
+					<div class="h-1.5 w-32 bg-yellow-500 mx-auto mt-4"></div>
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+					<div
+						onclick="filterPublicEventsBySport('Cricket')"
+						class="sport-card bg-white rounded-2xl overflow-hidden group cursor-pointer border border-gray-200 shadow-md hover:shadow-2xl hover:border-yellow-500 transition duration-500">
+						<div class="h-56 overflow-hidden">
+							<img
+								src="./assets/cricket.png"
+								alt="Cricket"
+								class="w-full h-full object-cover transition duration-700" />
+						</div>
+						<div class="p-8 text-center bg-white">
+							<h3
+								class="text-2xl font-black text-blue-900 italic group-hover:text-yellow-600 transition">
+								CRICKET
+							</h3>
+							<p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1">Explore Tournaments →</p>
+						</div>
+					</div>
+
+					<div
+						onclick="filterPublicEventsBySport('Kabaddi')"
+						class="sport-card bg-white rounded-2xl overflow-hidden group cursor-pointer border border-gray-200 shadow-md hover:shadow-2xl hover:border-yellow-500 transition duration-500">
+						<div class="h-56 overflow-hidden">
+							<img
+								src="./assets/image.png"
+								alt="Kabaddi"
+								class="w-full h-full object-cover transition duration-700" />
+						</div>
+						<div class="p-8 text-center bg-white">
+							<h3
+								class="text-2xl font-black text-blue-900 italic group-hover:text-yellow-600 transition">
+								KABADDI
+							</h3>
+							<p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1">Explore Tournaments →</p>
+						</div>
+					</div>
+
+					<div
+						onclick="filterPublicEventsBySport('Football')"
+						class="sport-card bg-white rounded-2xl overflow-hidden group cursor-pointer border border-gray-200 shadow-md hover:shadow-2xl hover:border-yellow-500 transition duration-500">
+						<div class="h-56 overflow-hidden">
+							<img
+								src="./assets/ronaldo.png"
+								alt="Football"
+								class="w-full h-full object-cover transition duration-700" />
+						</div>
+						<div class="p-8 text-center bg-white">
+							<h3
+								class="text-2xl font-black text-blue-900 italic group-hover:text-yellow-600 transition">
+								FOOTBALL
+							</h3>
+							<p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1">Explore Tournaments →</p>
+						</div>
+					</div>
+
+					<div
+						onclick="filterPublicEventsBySport('Track')"
+						class="sport-card bg-white rounded-2xl overflow-hidden group cursor-pointer border border-gray-200 shadow-md hover:shadow-2xl hover:border-yellow-500 transition duration-500">
+						<div class="h-56 overflow-hidden">
+							<img
+								src="./assets/athletics.png"
+								alt="Athletics"
+								class="w-full h-full object-cover transition duration-700" />
+						</div>
+						<div class="p-8 text-center bg-white">
+							<h3
+								class="text-2xl font-black text-blue-900 italic group-hover:text-yellow-600 transition">
+								TRACK & FIELD
+							</h3>
+							<p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1">Explore Tournaments →</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<footer class="bg-gray-900 text-white py-12 px-6 border-t border-gray-800">
+			<div
+				class="container mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
+				<div>
+					<h4 class="text-2xl font-black italic mb-4">PROSPORTS</h4>
+					<p class="text-gray-400">
+						Leading the digital revolution in sports registration.
+					</p>
+				</div>
+				<div>
+					<h4 class="font-bold mb-4 uppercase text-yellow-500">Help Desk</h4>
+					<p class="text-gray-400">Support: support@prosports.com</p>
+				</div>
+				<div>
+					<h4 class="font-bold mb-4 uppercase text-yellow-500">Follow Us</h4>
+					<div class="flex justify-center md:justify-start space-x-6 text-2xl">
+						<a href="#" class="hover:text-yellow-500 transition"
+							><i class="fab fa-instagram"></i
+						></a>
+						<a href="#" class="hover:text-yellow-500 transition"
+							><i class="fab fa-twitter"></i
+						></a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<!-- ================= AUTH MODAL ================= -->
+		<div
+			id="authModal"
+			class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-blue-900/40 backdrop-blur-md">
+			<div
+				class="bg-white rounded-3xl p-0 max-w-lg w-full mx-4 shadow-2xl relative overflow-hidden border border-white/20">
+				<div class="bg-blue-900 p-6 text-white relative">
+					<button
+						id="closeModal"
+						class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl transition-colors">
+						&times;
+					</button>
+					<h2 class="text-3xl font-black italic uppercase tracking-tighter">
+						Pro<span class="text-yellow-500">Sports</span>
+					</h2>
+					<p
+						class="text-blue-200 text-sm font-bold uppercase tracking-widest"
+						id="modalSubTitle">
+						Official Portal
+					</p>
+				</div>
+
+				<div class="p-8">
+					<div id="step1">
+						<p
+							class="text-gray-500 font-bold mb-6 uppercase text-xs tracking-widest text-center">
+							Select your category to proceed
+						</p>
+						<div class="grid grid-cols-2 gap-4">
+							<button
+								onclick="showDetailsForm('Athlete')"
+								class="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-2xl hover:border-blue-900 hover:bg-blue-50 transition-all group">
+								<div
+									class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-900 mb-4 group-hover:bg-blue-900 group-hover:text-white transition-all">
+									<i class="fas fa-running text-2xl"></i>
+								</div>
+								<span class="font-black text-blue-900 uppercase">Athlete</span>
+							</button>
+							<button
+								onclick="showDetailsForm('Official')"
+								class="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-2xl hover:border-yellow-500 hover:bg-yellow-50 transition-all group">
+								<div
+									class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 mb-4 group-hover:bg-yellow-500 group-hover:text-white transition-all">
+									<i class="fas fa-clipboard-check text-2xl"></i>
+								</div>
+								<span class="font-black text-blue-900 uppercase">Official</span>
+							</button>
+						</div>
+
+						<!-- Quick test login buttons for testing and demonstration -->
+						<div class="mt-6 pt-4 border-t border-gray-100 text-center">
+							<p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">⚡ Quick Test Accounts</p>
+							<div class="grid grid-cols-2 gap-2 text-xs">
+								<button
+									onclick="quickLoginPreset('vikram@prosports.com', 'Official')"
+									class="bg-yellow-50 hover:bg-yellow-100 border border-yellow-300 p-2 rounded-xl text-left transition">
+									<span class="font-black text-yellow-900 block">🟢 Vikram Singh</span>
+									<span class="text-[10px] text-gray-500">Approved Official</span>
+								</button>
+								<button
+									onclick="quickLoginPreset('rahul@prosports.com', 'Athlete')"
+									class="bg-blue-50 hover:bg-blue-100 border border-blue-300 p-2 rounded-xl text-left transition">
+									<span class="font-black text-blue-900 block">🟢 Rahul Sharma</span>
+									<span class="text-[10px] text-gray-500">Approved Athlete</span>
+								</button>
+								<button
+									onclick="quickLoginPreset('priya@prosports.com', 'Athlete')"
+									class="bg-amber-50 hover:bg-amber-100 border border-amber-300 p-2 rounded-xl text-left transition">
+									<span class="font-black text-amber-800 block">🟡 Priya Patel</span>
+									<span class="text-[10px] text-gray-500">Pending Athlete</span>
+								</button>
+								<button
+									onclick="quickLoginPreset('ananya@prosports.com', 'Official')"
+									class="bg-amber-50 hover:bg-amber-100 border border-amber-300 p-2 rounded-xl text-left transition">
+									<span class="font-black text-amber-800 block">🟡 Ananya Iyer</span>
+									<span class="text-[10px] text-gray-500">Pending Official</span>
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<div id="step2" class="hidden">
+						<!-- Toggle: New Registration vs Sign In -->
+						<div class="flex rounded-xl bg-gray-100 p-1 mb-5">
+							<button
+								type="button"
+								id="tabAuthRegister"
+								onclick="setAuthMode('register')"
+								class="flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg bg-white text-blue-900 shadow-sm transition">
+								New Registration
+							</button>
+							<button
+								type="button"
+								id="tabAuthLogin"
+								onclick="setAuthMode('login')"
+								class="flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg text-gray-500 hover:text-blue-900 transition">
+								Sign In
+							</button>
+						</div>
+
+						<h2
+							id="formTitle"
+							class="text-2xl font-black text-blue-900 mb-6 uppercase italic">
+							Registration
+						</h2>
+
+						<!-- Register Fields Container -->
+						<div id="registerFieldsGroup" class="space-y-4">
+							<div class="relative">
+								<i class="fas fa-user absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="text"
+									id="fullName"
+									placeholder="Full Name"
+									class="w-full pl-12 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all" />
+							</div>
+							<div class="relative">
+								<i class="fas fa-envelope absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="email"
+									id="uEmail"
+									placeholder="Email Address"
+									class="w-full pl-12 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all" />
+							</div>
+							<div class="relative">
+								<i class="fas fa-id-card absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="text"
+									id="uIdNumber"
+									placeholder="ID (Aadhar/Passport Number)"
+									class="w-full pl-12 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all" />
+							</div>
+							<div class="relative">
+								<i class="fas fa-lock absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="password"
+									id="uPassword"
+									placeholder="Password (Optional - for secure login)"
+									class="w-full pl-12 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all" />
+							</div>
+							<button
+								id="finalSubmit"
+								class="w-full bg-blue-900 text-white p-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 hover:text-blue-900 shadow-lg hover:shadow-yellow-500/20 transition-all">
+								Verify & Complete <i class="fas fa-arrow-right ml-2"></i>
+							</button>
+						</div>
+
+						<!-- Login Fields Container -->
+						<div id="loginFieldsGroup" class="hidden space-y-4">
+							<div class="relative">
+								<i class="fas fa-id-badge absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="text"
+									id="loginIdentifier"
+									placeholder="Enter Registered Email or ID Number"
+									class="w-full pl-12 p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all font-semibold text-sm" />
+							</div>
+							<div class="relative">
+								<i class="fas fa-lock absolute left-4 top-4 text-gray-400"></i>
+								<input
+									type="password"
+									id="loginPassword"
+									placeholder="Password (if set during registration)"
+									class="w-full pl-12 p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none transition-all font-semibold text-sm" />
+							</div>
+							<button
+								onclick="submitLogin()"
+								class="w-full bg-blue-900 text-white p-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 hover:text-blue-900 shadow-lg transition-all">
+								Sign In to Account <i class="fas fa-sign-in-alt ml-2"></i>
+							</button>
+						</div>
+
+						<button
+							onclick="resetModal()"
+							class="w-full text-center text-sm font-bold text-gray-400 hover:text-blue-900 uppercase tracking-tighter transition-colors mt-4">
+							← Wrong category? Go Back
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= MARATHON DASHBOARD ================= -->
+		<div
+			id="marathonDashboard"
+			class="hidden min-h-screen bg-slate-50 py-12 px-6">
+			<div class="container mx-auto">
+				<div
+					class="flex items-center justify-between mb-12 bg-white p-8 rounded-2xl shadow-xl border-b-4 border-yellow-500">
+					<div class="flex items-center space-x-6">
+						<div
+							class="w-20 h-20 bg-blue-900 rounded-full flex items-center justify-center text-white text-3xl font-black">
+							<span id="maraInitial">?</span>
+						</div>
+						<div>
+							<h1
+								id="maraUserName"
+								class="text-3xl font-black text-blue-900 uppercase italic">
+								Loading...
+							</h1>
+							<p
+								id="maraRoleSubtitle"
+								class="text-gray-400 font-bold uppercase tracking-widest text-xs">
+								Marathon Division
+							</p>
+						</div>
+					</div>
+					<button
+						onclick="returnToHome()"
+						class="bg-gray-100 text-blue-900 px-6 py-2 rounded-full font-black uppercase text-sm hover:bg-yellow-500 transition">
+						← Exit
+					</button>
+				</div>
+				<div
+					id="marathonList"
+					class="grid grid-cols-1 md:grid-cols-2 gap-8"></div>
+				<div
+					id="noMaraMsg"
+					class="hidden py-32 text-center bg-white rounded-2xl shadow-sm border border-gray-100">
+					<p class="text-2xl font-black text-gray-300 uppercase italic">
+						No Marathons Available
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= INTERACTIVE ACCESS & VERIFICATION MODAL ================= -->
+		<div id="accessNoticeModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center bg-blue-950/75 backdrop-blur-md p-4">
+			<div class="bg-white rounded-3xl max-w-md w-full shadow-2xl relative overflow-hidden border border-gray-100 text-center animate-in fade-in duration-200">
+				<!-- Top Status Accent Bar -->
+				<div id="accessModalTopBar" class="h-3 w-full bg-amber-500"></div>
+
+				<div class="p-6 md:p-8">
+					<!-- Icon Circle -->
+					<div id="accessModalIconBox" class="w-20 h-20 rounded-full flex items-center justify-center mx-auto text-3xl mb-4 bg-amber-100 text-amber-600 shadow-md">
+						<i id="accessModalIcon" class="fas fa-clock animate-pulse"></i>
+					</div>
+
+					<!-- Title & Subtitle -->
+					<h3 id="accessModalTitle" class="text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+						Approval Pending
+					</h3>
+					<p id="accessModalDesc" class="text-xs text-gray-500 font-semibold mt-2 leading-relaxed">
+						Your registration has been submitted and is currently awaiting verification from the League Administrator.
+					</p>
+
+					<!-- User Info Summary Card -->
+					<div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 my-5 text-left text-xs space-y-2">
+						<div class="flex justify-between items-center">
+							<span class="text-gray-400 font-bold uppercase text-[10px]">Applicant:</span>
+							<span id="accessModalUserName" class="font-black text-blue-950">---</span>
+						</div>
+						<div class="flex justify-between items-center">
+							<span class="text-gray-400 font-bold uppercase text-[10px]">Role / Category:</span>
+							<span id="accessModalUserRole" class="font-bold text-yellow-600">---</span>
+						</div>
+						<div class="flex justify-between items-center">
+							<span class="text-gray-400 font-bold uppercase text-[10px]">ID Number:</span>
+							<span id="accessModalUserId" class="font-mono font-bold text-gray-700 bg-white px-2 py-0.5 rounded border">---</span>
+						</div>
+						<div class="flex justify-between items-center pt-1.5 border-t border-gray-200">
+							<span class="text-gray-400 font-bold uppercase text-[10px]">Access Gate:</span>
+							<span id="accessModalBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-300">
+								🟡 Pending Review
+							</span>
+						</div>
+					</div>
+
+					<!-- Action Buttons -->
+					<div class="space-y-2.5">
+						<!-- Live Status Check -->
+						<button
+							id="btnLiveStatusCheck"
+							onclick="checkLiveApprovalStatus()"
+							class="w-full bg-blue-900 hover:bg-yellow-500 hover:text-blue-950 text-white font-black py-3 rounded-xl uppercase tracking-wider text-xs transition shadow-md flex items-center justify-center gap-2">
+							<i class="fas fa-sync-alt" id="statusCheckSpinner"></i> Check Live Approval Status
+						</button>
+
+						<!-- Open Admin Gateway -->
+						<a
+							href="admin.html"
+							target="_blank"
+							class="block w-full bg-yellow-50 hover:bg-yellow-100 border border-yellow-300 text-yellow-900 font-bold py-2.5 rounded-xl uppercase tracking-wider text-[11px] transition">
+							<i class="fas fa-external-link-alt mr-1"></i> Open Admin Portal to Allow Access
+						</a>
+
+						<!-- Sign Out -->
+						<button
+							onclick="handleLogout()"
+							class="w-full text-xs font-bold text-rose-600 hover:text-rose-800 uppercase tracking-wider transition py-1.5">
+							<i class="fas fa-sign-out-alt mr-1"></i> Log Out & Switch Account
+						</button>
+
+						<!-- Dismiss -->
+						<button
+							onclick="closeAccessNoticeModal()"
+							class="w-full text-xs font-bold text-gray-400 hover:text-gray-600 uppercase tracking-wider transition py-1">
+							Dismiss
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Configuration & Scripts -->
+		<script src="config.js"></script>
+		<script src="script.js" defer></script>
+
+		<!-- Chatbase Config -->
+		<script>
+		  window.embeddedChatbotConfig = {
+		    chatbotId: "snaWlIneg_U2zlLSul9KJ",
+		    domain: "www.chatbase.co"
+		  };
+		</script>
+
+		<!-- Chatbase Script -->
+		<script
+		  src="https://www.chatbase.co/embed.min.js"
+		  chatbotId="snaWlIneg_U2zlLSul9KJ"
+		  domain="www.chatbase.co"
+		  defer>
+		</script>
+	</body>
+</html>

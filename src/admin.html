@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+		<title>Pro Sports League | Administrator Control</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+		<style>
+			:root {
+				--sat: env(safe-area-inset-top, 0px);
+				--sab: env(safe-area-inset-bottom, 0px);
+			}
+			body {
+				padding-top: var(--sat);
+				padding-bottom: var(--sab);
+			}
+
+			/* Shake animation for invalid PIN */
+			@keyframes shake {
+				0%, 100% { transform: translateX(0); }
+				20%, 60% { transform: translateX(-8px); }
+				40%, 80% { transform: translateX(8px); }
+			}
+			.shake {
+				animation: shake 0.4s ease-in-out;
+			}
+
+			/* Toast slide in */
+			@keyframes slideIn {
+				from { transform: translateX(110%); opacity: 0; }
+				to { transform: translateX(0); opacity: 1; }
+			}
+			.toast-slide {
+				animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+			}
+		</style>
+	</head>
+	<body class="bg-slate-100 font-sans text-gray-800 min-h-screen">
+		<!-- Toast Container -->
+		<div id="toastBox" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+		<!-- ================= 4-DIGIT PIN LOCK SCREEN ================= -->
+		<div id="pinScreen" class="fixed inset-0 z-40 bg-blue-950 flex items-center justify-center p-4">
+			<div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 text-center border-t-8 border-yellow-500 overflow-hidden">
+				<div class="w-20 h-20 bg-blue-900 text-yellow-400 rounded-full flex items-center justify-center mx-auto text-3xl mb-5 shadow-lg">
+					<i class="fas fa-user-shield"></i>
+				</div>
+				<h1 class="text-3xl font-black text-blue-950 italic uppercase tracking-tighter">
+					Pro<span class="text-yellow-600">Sports</span> Admin
+				</h1>
+				<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mt-1 mb-6">
+					Security Gateway
+				</p>
+
+				<p class="text-sm text-gray-600 font-semibold mb-6">
+					Please enter your <strong class="text-blue-950">4-digit PIN</strong> to access the registration and approval control center.
+				</p>
+
+				<!-- PIN Form -->
+				<form id="pinForm" onsubmit="handlePinSubmit(event)" class="space-y-6">
+					<div class="flex justify-center gap-3" id="pinInputsContainer">
+						<input
+							type="password"
+							maxlength="1"
+							id="pin1"
+							class="pin-digit w-14 h-16 text-center text-3xl font-black rounded-2xl bg-gray-50 border-2 border-gray-200 focus:border-blue-900 focus:bg-white outline-none transition-all"
+							autofocus />
+						<input
+							type="password"
+							maxlength="1"
+							id="pin2"
+							class="pin-digit w-14 h-16 text-center text-3xl font-black rounded-2xl bg-gray-50 border-2 border-gray-200 focus:border-blue-900 focus:bg-white outline-none transition-all" />
+						<input
+							type="password"
+							maxlength="1"
+							id="pin3"
+							class="pin-digit w-14 h-16 text-center text-3xl font-black rounded-2xl bg-gray-50 border-2 border-gray-200 focus:border-blue-900 focus:bg-white outline-none transition-all" />
+						<input
+							type="password"
+							maxlength="1"
+							id="pin4"
+							class="pin-digit w-14 h-16 text-center text-3xl font-black rounded-2xl bg-gray-50 border-2 border-gray-200 focus:border-blue-900 focus:bg-white outline-none transition-all" />
+					</div>
+
+					<div id="pinErrorMsg" class="hidden text-xs font-bold text-rose-600 flex items-center justify-center gap-1.5">
+						<i class="fas fa-exclamation-circle"></i> Invalid 4-digit PIN. Please try again.
+					</div>
+
+					<button
+						type="submit"
+						class="w-full bg-blue-900 hover:bg-yellow-500 hover:text-blue-950 text-white font-black py-4 rounded-xl uppercase tracking-widest text-sm transition-all shadow-lg flex items-center justify-center gap-2">
+						<i class="fas fa-unlock-alt"></i> Unlock Admin Access
+					</button>
+				</form>
+
+				<div class="mt-6 pt-4 border-t text-xs text-gray-400 flex justify-between items-center">
+					<span>Default PIN: <strong class="text-blue-900 font-mono">1234</strong></span>
+					<a href="index.html" class="font-bold text-gray-500 hover:text-blue-900 transition">
+						&larr; Back to Website
+					</a>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= ADMIN DASHBOARD (UNLOCKED) ================= -->
+		<div id="adminMainScreen" class="hidden pb-16">
+			<!-- Top Navbar -->
+			<nav class="bg-blue-950 text-white sticky top-0 z-30 shadow-xl border-b-2 border-yellow-500">
+				<div class="container mx-auto px-6 py-4 flex justify-between items-center">
+					<div class="flex items-center gap-4">
+						<div class="text-2xl font-black italic tracking-tighter">
+							PRO<span class="text-yellow-500">SPORTS</span>
+							<span class="text-xs uppercase font-normal tracking-widest text-blue-200 ml-2 border-l border-blue-700 pl-3">
+								Admin Portal
+							</span>
+						</div>
+					</div>
+
+					<div class="flex items-center gap-4 text-xs font-bold">
+						<span class="hidden md:inline-flex items-center gap-2 bg-blue-900/80 px-3 py-1.5 rounded-full border border-blue-700 text-yellow-400">
+							<i class="fas fa-check-circle text-emerald-400"></i> Authorized Session Active
+						</span>
+						<a
+							href="index.html"
+							target="_blank"
+							class="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-xl transition flex items-center gap-1.5 border border-blue-700">
+							<i class="fas fa-external-link-alt"></i> Open Website
+						</a>
+						<button
+							onclick="lockAdminScreen()"
+							class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl uppercase tracking-wider transition flex items-center gap-1.5 shadow">
+							<i class="fas fa-lock"></i> Lock
+						</button>
+					</div>
+				</div>
+			</nav>
+
+			<!-- Main Container -->
+			<div class="container mx-auto px-6 pt-8 max-w-7xl">
+				<!-- Header Title -->
+				<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+					<div>
+						<h1 class="text-3xl font-black text-blue-955 uppercase italic tracking-tighter">
+							Applicant Verification & Access Management
+						</h1>
+						<p class="text-gray-500 text-sm font-semibold mt-1">
+							Review registrations made by athletes and officials. <strong>Allow</strong> them to grant account access, or <strong>Deny</strong> to block entry.
+						</p>
+					</div>
+					<div class="flex items-center gap-3">
+						<button
+							onclick="loadRegistrations()"
+							class="bg-white hover:bg-gray-50 border border-gray-300 text-blue-950 font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center gap-2">
+							<i class="fas fa-sync-alt" id="refreshSpin"></i> Refresh Data
+						</button>
+						<button
+							onclick="openAddApplicantModal()"
+							class="bg-yellow-500 hover:bg-yellow-400 text-blue-950 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+							<i class="fas fa-plus"></i> Add Test Applicant
+						</button>
+					</div>
+				</div>
+
+				<!-- Stats Ribbon -->
+				<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+					<div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+						<div class="text-xs uppercase font-bold text-gray-400 flex justify-between">
+							<span>Total Applications</span>
+							<i class="fas fa-users text-blue-900"></i>
+						</div>
+						<div id="statTotal" class="text-3xl font-black text-blue-950 mt-1">0</div>
+					</div>
+
+					<div class="bg-amber-50 p-5 rounded-2xl shadow-sm border border-amber-300">
+						<div class="text-xs uppercase font-black text-amber-700 flex justify-between">
+							<span>Pending Approval</span>
+							<i class="fas fa-clock text-amber-600 animate-pulse"></i>
+						</div>
+						<div id="statPending" class="text-3xl font-black text-amber-700 mt-1">0</div>
+						<div class="text-[10px] text-amber-600 font-bold mt-1">Requires your decision</div>
+					</div>
+
+					<div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+						<div class="text-xs uppercase font-bold text-gray-400 flex justify-between">
+							<span>Approved Athletes</span>
+							<i class="fas fa-running text-blue-600"></i>
+						</div>
+						<div id="statApprovedAthletes" class="text-3xl font-black text-blue-950 mt-1">0</div>
+					</div>
+
+					<div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+						<div class="text-xs uppercase font-bold text-gray-400 flex justify-between">
+							<span>Approved Officials</span>
+							<i class="fas fa-clipboard-check text-yellow-600"></i>
+						</div>
+						<div id="statApprovedOfficials" class="text-3xl font-black text-blue-950 mt-1">0</div>
+					</div>
+
+					<div class="bg-rose-50 p-5 rounded-2xl shadow-sm border border-rose-300">
+						<div class="text-xs uppercase font-black text-rose-700 flex justify-between">
+							<span>Denied Access</span>
+							<i class="fas fa-ban text-rose-600"></i>
+						</div>
+						<div id="statDenied" class="text-3xl font-black text-rose-700 mt-1">0</div>
+					</div>
+				</div>
+
+				<!-- Table Box -->
+				<div class="bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden">
+					<!-- Filter Tabs & Search -->
+					<div class="p-6 border-b border-gray-200 bg-gray-50/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+						<div class="flex flex-wrap items-center gap-2">
+							<button
+								onclick="setFilter('all')"
+								id="btnFilter-all"
+								class="filter-tab active bg-blue-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								All (<span id="countAll">0</span>)
+							</button>
+							<button
+								onclick="setFilter('pending')"
+								id="btnFilter-pending"
+								class="filter-tab bg-white border border-gray-300 text-gray-700 hover:border-amber-500 hover:text-amber-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								Pending (<span id="countPending">0</span>)
+							</button>
+							<button
+								onclick="setFilter('Athlete')"
+								id="btnFilter-Athlete"
+								class="filter-tab bg-white border border-gray-300 text-gray-700 hover:border-blue-900 hover:text-blue-900 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								Athletes
+							</button>
+							<button
+								onclick="setFilter('Official')"
+								id="btnFilter-Official"
+								class="filter-tab bg-white border border-gray-300 text-gray-700 hover:border-yellow-600 hover:text-yellow-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								Officials
+							</button>
+							<button
+								onclick="setFilter('approved')"
+								id="btnFilter-approved"
+								class="filter-tab bg-white border border-gray-300 text-gray-700 hover:border-emerald-600 hover:text-emerald-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								Allowed
+							</button>
+							<button
+								onclick="setFilter('denied')"
+								id="btnFilter-denied"
+								class="filter-tab bg-white border border-gray-300 text-gray-700 hover:border-rose-600 hover:text-rose-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition">
+								Denied
+							</button>
+						</div>
+
+						<div class="relative w-full md:w-80">
+							<i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+							<input
+								type="text"
+								id="searchInput"
+								oninput="renderTable()"
+								placeholder="Search name, ID, or email..."
+								class="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-900 text-xs font-bold transition" />
+						</div>
+					</div>
+
+					<!-- Table -->
+					<div class="overflow-x-auto">
+						<table class="w-full text-left border-collapse">
+							<thead>
+								<tr class="bg-gray-100/70 border-b border-gray-200 text-[11px] font-black uppercase tracking-widest text-gray-500">
+									<th class="py-4 px-6">Applicant Name</th>
+									<th class="py-4 px-6">Category / Role</th>
+									<th class="py-4 px-6">Email Address</th>
+									<th class="py-4 px-6">Govt ID Number</th>
+									<th class="py-4 px-6">Current Access Status</th>
+									<th class="py-4 px-6 text-right">Admin Decision</th>
+								</tr>
+							</thead>
+							<tbody id="tableBody" class="divide-y divide-gray-100 text-sm">
+								<!-- Populated dynamically -->
+							</tbody>
+						</table>
+					</div>
+
+					<!-- Empty State -->
+					<div id="emptyNotice" class="hidden py-16 text-center">
+						<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto text-gray-400 text-2xl mb-3">
+							<i class="fas fa-inbox"></i>
+						</div>
+						<p class="text-lg font-black text-gray-700 uppercase italic">No Registrations Found</p>
+						<p class="text-xs text-gray-400 font-bold mt-1">Try clearing your search or filter.</p>
+					</div>
+
+					<!-- Table Footer Guide -->
+					<div class="p-4 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex flex-col md:flex-row justify-between items-center gap-2">
+						<div class="flex items-center gap-4">
+							<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> <strong>Pending:</strong> User dashboard locked</span>
+							<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <strong>Allowed:</strong> Full user access granted</span>
+							<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> <strong>Denied:</strong> User account rejected</span>
+						</div>
+						<div class="text-[11px] font-bold text-gray-400">
+							Changes sync immediately with the database and website.
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= QUICK APPLICANT MODAL ================= -->
+		<div id="addModal" class="hidden fixed inset-0 z-50 bg-blue-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+			<div class="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative">
+				<div class="flex justify-between items-center mb-5">
+					<h3 class="text-xl font-black text-blue-900 uppercase italic">Create Test Applicant</h3>
+					<button onclick="closeAddApplicantModal()" class="text-gray-400 hover:text-gray-700 text-2xl font-bold">&times;</button>
+				</div>
+				<form onsubmit="submitNewApplicant(event)" class="space-y-4 text-xs">
+					<div>
+						<label class="block font-bold text-gray-600 uppercase mb-1">Full Name</label>
+						<input type="text" id="newApplicantName" required placeholder="e.g. John Doe" class="w-full p-3 bg-gray-50 border rounded-xl font-semibold outline-none focus:ring-2 focus:ring-blue-900" />
+					</div>
+					<div>
+						<label class="block font-bold text-gray-600 uppercase mb-1">Email</label>
+						<input type="email" id="newApplicantEmail" required placeholder="e.g. john@example.com" class="w-full p-3 bg-gray-50 border rounded-xl font-semibold outline-none focus:ring-2 focus:ring-blue-900" />
+					</div>
+					<div>
+						<label class="block font-bold text-gray-600 uppercase mb-1">ID Number (Aadhar/Passport)</label>
+						<input type="text" id="newApplicantId" required placeholder="e.g. ATH-7744" class="w-full p-3 bg-gray-50 border rounded-xl font-semibold outline-none focus:ring-2 focus:ring-blue-900" />
+					</div>
+					<div>
+						<label class="block font-bold text-gray-600 uppercase mb-1">Category</label>
+						<select id="newApplicantRole" class="w-full p-3 bg-gray-50 border rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-900">
+							<option value="Athlete">Athlete</option>
+							<option value="Official">Official</option>
+						</select>
+					</div>
+					<button
+						type="submit"
+						class="w-full bg-blue-900 hover:bg-yellow-500 hover:text-blue-950 text-white font-black p-3.5 rounded-xl uppercase tracking-wider transition text-xs shadow-md mt-2">
+						Register as Pending
+					</button>
+				</form>
+			</div>
+		</div>
+
+		<!-- Configuration & Scripts -->
+		<script src="config.js"></script>
+		<script>
+			// Universal API Base URL from centralized config
+			const API_BASE = window.CONFIG ? window.CONFIG.getApiBase() : '';
+			const CORRECT_PIN = "1234";
+			let activeFilter = 'all';
+			let registrations = [];
+
+			function getAdminHeaders() {
+				const headers = { 'Content-Type': 'application/json' };
+				const pin = sessionStorage.getItem('adminPin') || CORRECT_PIN;
+				if (pin) headers['x-admin-pin'] = pin;
+				const token = sessionStorage.getItem('adminToken');
+				if (token) headers['Authorization'] = `Bearer ${token}`;
+				return headers;
+			}
+
+			// Handle 4-digit PIN Inputs
+			document.addEventListener('DOMContentLoaded', () => {
+				const inputs = document.querySelectorAll('.pin-digit');
+				inputs.forEach((input, index) => {
+					input.addEventListener('input', (e) => {
+						if (e.target.value.length === 1 && index < inputs.length - 1) {
+							inputs[index + 1].focus();
+						}
+						// If all 4 filled, trigger submit
+						const fullPin = Array.from(inputs).map(i => i.value).join('');
+						if (fullPin.length === 4) {
+							verifyPin(fullPin);
+						}
+					});
+
+					input.addEventListener('keydown', (e) => {
+						if (e.key === 'Backspace' && !input.value && index > 0) {
+							inputs[index - 1].focus();
+						}
+					});
+				});
+
+				// Auto-unlock if session was already active in this tab
+				if (sessionStorage.getItem('adminPinUnlocked') === 'true') {
+					unlockAdminScreen();
+				}
+			});
+
+			function handlePinSubmit(e) {
+				e.preventDefault();
+				const inputs = document.querySelectorAll('.pin-digit');
+				const pin = Array.from(inputs).map(i => i.value).join('');
+				verifyPin(pin);
+			}
+
+			async function verifyPin(pin) {
+				const errorMsg = document.getElementById('pinErrorMsg');
+				const formContainer = document.getElementById('pinInputsContainer');
+
+				// Attempt remote verification first
+				try {
+					const res = await fetch(`${API_BASE}/admin/login`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ pin })
+					});
+
+					if (res.ok) {
+						const data = await res.json();
+						if (data.token) sessionStorage.setItem('adminToken', data.token);
+						sessionStorage.setItem('adminPin', pin);
+						sessionStorage.setItem('adminPinUnlocked', 'true');
+						errorMsg.classList.add('hidden');
+						unlockAdminScreen();
+						return;
+					}
+				} catch (err) {
+					console.warn("Backend offline, checking local PIN", err);
+				}
+
+				if (pin === CORRECT_PIN) {
+					sessionStorage.setItem('adminPin', pin);
+					sessionStorage.setItem('adminPinUnlocked', 'true');
+					errorMsg.classList.add('hidden');
+					unlockAdminScreen();
+				} else {
+					errorMsg.classList.remove('hidden');
+					formContainer.classList.add('shake');
+					setTimeout(() => formContainer.classList.remove('shake'), 400);
+					document.querySelectorAll('.pin-digit').forEach(i => i.value = '');
+					document.getElementById('pin1').focus();
+				}
+			}
+
+			function unlockAdminScreen() {
+				document.getElementById('pinScreen').classList.add('hidden');
+				document.getElementById('adminMainScreen').classList.remove('hidden');
+				loadRegistrations();
+			}
+
+			function lockAdminScreen() {
+				sessionStorage.removeItem('adminPinUnlocked');
+				sessionStorage.removeItem('adminToken');
+				sessionStorage.removeItem('adminPin');
+				document.getElementById('adminMainScreen').classList.add('hidden');
+				document.getElementById('pinScreen').classList.remove('hidden');
+				document.querySelectorAll('.pin-digit').forEach(i => i.value = '');
+				document.getElementById('pin1').focus();
+				document.getElementById('pinErrorMsg').classList.add('hidden');
+			}
+
+			// Toast notifications
+			function showToast(message, type = 'success') {
+				const container = document.getElementById('toastBox');
+				if (!container) return;
+
+				const toast = document.createElement('div');
+				const colors = {
+					success: 'bg-emerald-600 text-white',
+					danger: 'bg-rose-600 text-white',
+					warning: 'bg-amber-600 text-white'
+				};
+
+				toast.className = `toast-slide flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-xs font-bold ${colors[type] || colors.success}`;
+				toast.innerHTML = `<span>${message}</span>`;
+				container.appendChild(toast);
+
+				setTimeout(() => {
+					toast.style.opacity = '0';
+					toast.style.transition = 'opacity 0.3s';
+					setTimeout(() => toast.remove(), 300);
+				}, 3500);
+			}
+
+			// Load registrations from backend
+			async function loadRegistrations() {
+				const spin = document.getElementById('refreshSpin');
+				if (spin) spin.classList.add('fa-spin');
+
+				try {
+					const res = await fetch(`${API_BASE}/admin/registrations`, {
+						headers: getAdminHeaders()
+					});
+					if (res.ok) {
+						const data = await res.json();
+						registrations = data.users || [];
+						updateMetrics();
+						renderTable();
+					}
+				} catch (err) {
+					console.warn("Server offline", err);
+					showToast("Cannot connect to server at " + API_BASE, "danger");
+				} finally {
+					if (spin) spin.classList.remove('fa-spin');
+				}
+			}
+
+			function updateMetrics() {
+				const total = registrations.length;
+				const pending = registrations.filter(u => u.status === 'pending').length;
+				const approvedAthletes = registrations.filter(u => u.status === 'approved' && u.role === 'Athlete').length;
+				const approvedOfficials = registrations.filter(u => u.status === 'approved' && u.role === 'Official').length;
+				const denied = registrations.filter(u => u.status === 'denied').length;
+
+				document.getElementById('statTotal').innerText = total;
+				document.getElementById('statPending').innerText = pending;
+				document.getElementById('statApprovedAthletes').innerText = approvedAthletes;
+				document.getElementById('statApprovedOfficials').innerText = approvedOfficials;
+				document.getElementById('statDenied').innerText = denied;
+
+				document.getElementById('countAll').innerText = total;
+				document.getElementById('countPending').innerText = pending;
+			}
+
+			function setFilter(filter) {
+				activeFilter = filter;
+				document.querySelectorAll('.filter-tab').forEach(b => {
+					b.classList.remove('active', 'bg-blue-900', 'text-white');
+					b.classList.add('bg-white', 'text-gray-700');
+				});
+
+				const activeBtn = document.getElementById(`btnFilter-${filter}`);
+				if (activeBtn) {
+					activeBtn.classList.add('active', 'bg-blue-900', 'text-white');
+					activeBtn.classList.remove('bg-white', 'text-gray-700');
+				}
+
+				renderTable();
+			}
+
+			function renderTable() {
+				const tbody = document.getElementById('tableBody');
+				const empty = document.getElementById('emptyNotice');
+				const query = (document.getElementById('searchInput').value || '').toLowerCase();
+
+				tbody.innerHTML = '';
+
+				let filtered = registrations.filter(u => {
+					if (activeFilter === 'pending') return u.status === 'pending';
+					if (activeFilter === 'approved') return u.status === 'approved';
+					if (activeFilter === 'denied') return u.status === 'denied';
+					if (activeFilter === 'Athlete') return u.role === 'Athlete';
+					if (activeFilter === 'Official') return u.role === 'Official';
+					return true;
+				});
+
+				if (query) {
+					filtered = filtered.filter(u =>
+						(u.name && u.name.toLowerCase().includes(query)) ||
+						(u.email && u.email.toLowerCase().includes(query)) ||
+						(u.idNumber && u.idNumber.toLowerCase().includes(query))
+					);
+				}
+
+				if (filtered.length === 0) {
+					empty.classList.remove('hidden');
+					return;
+				}
+				empty.classList.add('hidden');
+
+				filtered.forEach(u => {
+					const row = document.createElement('tr');
+					row.className = 'hover:bg-blue-50/50 transition-colors border-b border-gray-100';
+
+					const roleBadge = u.role === 'Official'
+						? '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-yellow-100 text-yellow-800 border border-yellow-300"><i class="fas fa-clipboard-check text-[10px]"></i> OFFICIAL</span>'
+						: '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-900 border border-blue-300"><i class="fas fa-running text-[10px]"></i> ATHLETE</span>';
+
+					let statusBadge = '';
+					if (u.status === 'approved') {
+						statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> ALLOWED</span>';
+					} else if (u.status === 'denied') {
+						statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 border border-rose-300"><span class="w-2 h-2 rounded-full bg-rose-500"></span> DENIED</span>';
+					} else {
+						statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"><span class="w-2 h-2 rounded-full bg-amber-500"></span> PENDING</span>';
+					}
+
+					row.innerHTML = `
+						<td class="py-4 px-6">
+							<div class="flex items-center gap-3">
+								<div class="w-10 h-10 rounded-full bg-blue-900 text-white flex items-center justify-center font-black text-sm shadow">
+									${u.name ? u.name.charAt(0).toUpperCase() : '?'}
+								</div>
+								<div>
+									<div class="font-black text-blue-950">${u.name}</div>
+								</div>
+							</div>
+						</td>
+						<td class="py-4 px-6">${roleBadge}</td>
+						<td class="py-4 px-6 text-xs text-gray-500 font-semibold">${u.email}</td>
+						<td class="py-4 px-6">
+							<span class="font-mono font-bold text-xs bg-gray-100 px-2.5 py-1 rounded-lg border text-gray-700">
+								${u.idNumber}
+							</span>
+						</td>
+						<td class="py-4 px-6">${statusBadge}</td>
+						<td class="py-4 px-6 text-right">
+							<div class="flex items-center justify-end gap-2">
+								<button
+									onclick="changeStatus('${u.idNumber}', 'approved', '${u.name}')"
+									class="px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1 ${u.status === 'approved' ? 'bg-emerald-100 text-emerald-800 cursor-default' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}">
+									<i class="fas fa-check"></i> ${u.status === 'approved' ? 'Allowed' : 'Allow'}
+								</button>
+								<button
+									onclick="changeStatus('${u.idNumber}', 'denied', '${u.name}')"
+									class="px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1 ${u.status === 'denied' ? 'bg-rose-100 text-rose-800 cursor-default' : 'bg-rose-600 hover:bg-rose-700 text-white'}">
+									<i class="fas fa-ban"></i> ${u.status === 'denied' ? 'Denied' : 'Deny'}
+								</button>
+								<button
+									onclick="deleteEntry('${u.idNumber}', '${u.name}')"
+									title="Delete"
+									class="p-2 text-gray-400 hover:text-rose-600 transition">
+									<i class="fas fa-trash-alt text-xs"></i>
+								</button>
+							</div>
+						</td>
+					`;
+					tbody.appendChild(row);
+				});
+			}
+
+			// Admin change status
+			async function changeStatus(idNumber, status, name) {
+				try {
+					const res = await fetch(`${API_BASE}/admin/update-status`, {
+						method: 'POST',
+						headers: getAdminHeaders(),
+						body: JSON.stringify({ idNumber, status })
+					});
+
+					if (res.ok) {
+						const target = registrations.find(u => u.idNumber === idNumber);
+						if (target) target.status = status;
+						updateMetrics();
+						renderTable();
+
+						if (status === 'approved') {
+							showToast(`Allowed & Approved: ${name} now has full account access!`, 'success');
+						} else {
+							showToast(`Access Denied: ${name}'s account has been blocked.`, 'danger');
+						}
+					}
+				} catch (err) {
+					showToast("Error updating status on server", "danger");
+				}
+			}
+
+			async function deleteEntry(idNumber, name) {
+				if (!confirm(`Delete registration for ${name}?`)) return;
+
+				try {
+					const res = await fetch(`${API_BASE}/admin/delete-registration`, {
+						method: 'POST',
+						headers: getAdminHeaders(),
+						body: JSON.stringify({ idNumber })
+					});
+
+					if (res.ok) {
+						registrations = registrations.filter(u => u.idNumber !== idNumber);
+						updateMetrics();
+						renderTable();
+						showToast(`Removed registration for ${name}`, 'warning');
+					}
+				} catch (err) {
+					showToast("Could not delete from server", "danger");
+				}
+			}
+
+			// Quick modal
+			function openAddApplicantModal() {
+				document.getElementById('addModal').classList.remove('hidden');
+			}
+			function closeAddApplicantModal() {
+				document.getElementById('addModal').classList.add('hidden');
+			}
+			async function submitNewApplicant(e) {
+				e.preventDefault();
+				const name = document.getElementById('newApplicantName').value.trim();
+				const email = document.getElementById('newApplicantEmail').value.trim();
+				const idNumber = document.getElementById('newApplicantId').value.trim();
+				const role = document.getElementById('newApplicantRole').value;
+
+				try {
+					const res = await fetch(`${API_BASE}/register`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ name, email, idNumber, role })
+					});
+					if (res.ok) {
+						closeAddApplicantModal();
+						showToast(`New ${role} "${name}" registered as Pending!`, 'success');
+						loadRegistrations();
+						document.getElementById('newApplicantName').value = '';
+						document.getElementById('newApplicantEmail').value = '';
+						document.getElementById('newApplicantId').value = '';
+					} else {
+						const err = await res.json();
+						showToast(err.error || "Failed to register", "danger");
+					}
+				} catch (err) {
+					showToast("Server error", "danger");
+				}
+			}
+		</script>
+	</body>
+</html>

@@ -1,6 +1,6 @@
 // Pro Sports League - Core Client Script
 // Universal API Base URL resolved from centralized config
-const API_BASE = window.CONFIG ? window.CONFIG.getApiBase() : '';
+let API_BASE = window.CONFIG ? window.CONFIG.getApiBase() : '';
 
 let currentSelectedRole = 'Athlete';
 let currentManagedEvent = null;
@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateChatbotContext();
     initCapacitorPlugins();
+    checkBackendHealthLive();
 });
 
 // ================= USER STORAGE & HELPER =================
@@ -545,20 +546,48 @@ async function loadPublicEvents() {
     if (!grid) return;
 
     try {
-        const res = await fetch(`${API_BASE}/events`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${API_BASE}/events`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (res.ok) {
             const events = await res.json();
             cachedPublicEvents = Array.isArray(events) ? events : [];
             renderPublicEventsGrid(cachedPublicEvents);
+            checkBackendHealthLive(API_BASE);
         } else {
             grid.innerHTML = '<div class="col-span-full py-16 text-center text-rose-500 font-bold">Failed to load public sports events.</div>';
         }
     } catch (err) {
-        console.warn('Network issue fetching public events, checking offline cache...');
+        console.warn('Network issue fetching public events from:', API_BASE, err);
+        checkBackendHealthLive(API_BASE);
         if (cachedPublicEvents.length > 0) {
             renderPublicEventsGrid(cachedPublicEvents);
         } else {
-            grid.innerHTML = '<div class="col-span-full py-16 text-center text-gray-400 font-bold">Connecting to sports event service...</div>';
+            grid.innerHTML = `
+                <div class="col-span-full py-12 text-center bg-white rounded-3xl border border-gray-200 p-8 shadow-sm">
+                    <div class="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto text-2xl mb-3">
+                        <i class="fas fa-server"></i>
+                    </div>
+                    <h3 class="text-xl font-black text-blue-950 uppercase italic">Backend Server Not Connected</h3>
+                    <p class="text-xs text-gray-500 font-semibold mt-1 max-w-md mx-auto">
+                        The app is attempting to connect to:<br>
+                        <span class="inline-block mt-1.5 font-mono text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-200 break-all">${API_BASE || 'http://localhost:3000'}</span>
+                    </p>
+                    <p class="text-[11px] text-gray-400 mt-2 max-w-sm mx-auto">
+                        If running on an Android device, ensure your computer and phone are on the same Wi-Fi network and node server is active.
+                    </p>
+                    <div class="flex flex-wrap items-center justify-center gap-3 mt-5">
+                        <button onclick="openServerConfigModal()" class="bg-blue-900 hover:bg-yellow-500 hover:text-blue-950 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+                            <i class="fas fa-sliders-h text-yellow-400"></i> Configure Backend URL
+                        </button>
+                        <button onclick="loadPublicEvents()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition flex items-center gap-2">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                    </div>
+                </div>
+            `;
         }
     }
 }
@@ -2108,5 +2137,143 @@ function initCapacitorPlugins() {
                 }
             });
         } catch (e) {}
+    }
+}
+
+// ================= SERVER CONNECTION MANAGER =================
+async function checkBackendHealthLive(urlToCheck = null) {
+    const targetUrl = urlToCheck || API_BASE;
+    const dot = document.getElementById('navServerPingDot');
+    const mDot = document.getElementById('mobileServerPingDot');
+    const txt = document.getElementById('navServerPingText');
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`${targetUrl}/events`, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+            if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+            if (txt) txt.innerText = 'Server Online';
+            return true;
+        } else {
+            throw new Error('Server returned non-200');
+        }
+    } catch (e) {
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500';
+        if (txt) txt.innerText = 'Server Offline';
+        return false;
+    }
+}
+
+function openServerConfigModal() {
+    const modal = document.getElementById('serverConfigModal');
+    if (!modal) return;
+    const input = document.getElementById('serverUrlInput');
+    const activeText = document.getElementById('activeServerUrlText');
+    const pill = document.getElementById('serverLiveStatusPill');
+    const feedback = document.getElementById('serverTestFeedback');
+
+    if (input) input.value = API_BASE;
+    if (activeText) activeText.innerText = API_BASE;
+    if (feedback) feedback.classList.add('hidden');
+
+    modal.classList.remove('hidden');
+
+    // Run quick health check
+    checkBackendHealthLive(API_BASE).then(isOk => {
+        if (pill) {
+            pill.className = isOk 
+                ? 'flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300';
+            pill.innerHTML = isOk 
+                ? '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Connected' 
+                : '<span class="w-2 h-2 rounded-full bg-rose-500"></span> Offline';
+        }
+    });
+}
+
+function closeServerConfigModal() {
+    const modal = document.getElementById('serverConfigModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setPresetServerUrl(presetUrl) {
+    const input = document.getElementById('serverUrlInput');
+    if (input) input.value = presetUrl;
+    testAndSaveServerUrl(presetUrl);
+}
+
+function resetServerUrlToDefault() {
+    localStorage.removeItem('sportsconnect_api_override');
+    API_BASE = window.CONFIG ? window.CONFIG.getApiBase() : 'http://localhost:3000';
+    showInteractiveToast('Reset Server URL', `Reset backend target to default: ${API_BASE}`, 'info');
+    openServerConfigModal();
+    loadPublicEvents();
+}
+
+async function testAndSaveServerUrl(overrideUrl = null) {
+    const input = document.getElementById('serverUrlInput');
+    const feedback = document.getElementById('serverTestFeedback');
+    const saveBtn = document.getElementById('btnSaveServerUrl');
+    const url = (overrideUrl || (input ? input.value : '') || '').trim().replace(/\/+$/, '');
+
+    if (!url) {
+        if (feedback) {
+            feedback.className = 'p-3 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200';
+            feedback.innerText = 'Please enter a valid HTTP or HTTPS server URL.';
+            feedback.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Testing...';
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${url}/events`, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            localStorage.setItem('sportsconnect_api_override', url);
+            API_BASE = url;
+            if (window.CONFIG) {
+                window.CONFIG.DEV_LAN_API_URL = url;
+            }
+
+            if (feedback) {
+                feedback.className = 'p-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200';
+                feedback.innerHTML = `<i class="fas fa-check-circle mr-1"></i> Connected successfully! Saved as active backend: <strong>${url}</strong>`;
+                feedback.classList.remove('hidden');
+            }
+
+            showInteractiveToast('Server Connected!', `Backend URL set to ${url}`, 'success');
+            checkBackendHealthLive(url);
+            setTimeout(() => {
+                closeServerConfigModal();
+                loadPublicEvents();
+            }, 1000);
+        } else {
+            throw new Error(`Server returned HTTP ${res.status}`);
+        }
+    } catch (err) {
+        if (feedback) {
+            feedback.className = 'p-3 rounded-xl text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200';
+            feedback.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> Cannot connect to <strong>${url}</strong>.<br><span class="text-[11px] font-normal">Ensure your PC running "node server.js" and phone are on the same Wi-Fi, or test using the PC Wi-Fi IP (http://10.85.77.243:3000).</span>`;
+            feedback.classList.remove('hidden');
+        }
+        showInteractiveToast('Connection Failed', `Could not reach ${url}`, 'danger');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check-circle text-yellow-400 mr-1"></i> Test & Save';
+        }
     }
 }

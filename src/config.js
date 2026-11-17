@@ -68,4 +68,8 @@ const CONFIG = {
         }
 
         // Default local development fallback
-      
+        return this.LOCAL_URL;
+    }
+};
+
+window.CONFIG = CONFIG;

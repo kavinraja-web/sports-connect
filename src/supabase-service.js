@@ -444,6 +444,59 @@ const SupabaseService = {
             console.error('[SupabaseService] getMarathons error:', e);
             throw e;
         }
+    },
+
+    // 13. Admin: Get all registered users directly from Supabase Cloud
+    async getAllUsers() {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(`${this.URL}/rest/v1/users?select=*&order=created_at.desc`, {
+                headers: this.getHeaders(),
+                signal: controller.signal
+            });
+            clearTimeout(tid);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            return (data || []).map(u => this.formatUser(u));
+        } catch (e) {
+            console.error('[SupabaseService] getAllUsers error:', e);
+            throw e;
+        }
+    },
+
+    // 14. Admin: Update user approval status ('approved' | 'denied' | 'pending')
+    async updateUserStatus(idNumber, status) {
+        try {
+            const cleanId = (idNumber || '').trim();
+            const res = await fetch(`${this.URL}/rest/v1/users?id_number=eq.${encodeURIComponent(cleanId)}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ approval_status: status })
+            });
+            if (!res.ok) throw new Error(`Failed to update status (HTTP ${res.status})`);
+            const data = await res.json();
+            return data && data.length > 0 ? this.formatUser(data[0]) : null;
+        } catch (e) {
+            console.error('[SupabaseService] updateUserStatus error:', e);
+            throw e;
+        }
+    },
+
+    // 15. Admin: Delete user registration
+    async deleteUser(idNumber) {
+        try {
+            const cleanId = (idNumber || '').trim();
+            const res = await fetch(`${this.URL}/rest/v1/users?id_number=eq.${encodeURIComponent(cleanId)}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+            if (!res.ok) throw new Error(`Failed to delete user (HTTP ${res.status})`);
+            return true;
+        } catch (e) {
+            console.error('[SupabaseService] deleteUser error:', e);
+            throw e;
+        }
     }
 };
 

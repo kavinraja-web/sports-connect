@@ -311,26 +311,59 @@ async function checkLiveApprovalStatus() {
     if (spinner) spinner.classList.add('fa-spin');
 
     try {
-        const res = await fetch(`${API_BASE}/user-status?idNumber=${encodeURIComponent(user.idNumber)}`);
-        if (res.ok) {
-            const data = await res.json();
-            user.status = data.status;
+        let currentStatus = null;
+
+        // 1. Direct Supabase Cloud check
+        if (window.SupabaseService && (!window.CONFIG || window.CONFIG.USE_DIRECT_SUPABASE)) {
+            try {
+                const checkRes = await fetch(`${window.SupabaseService.URL}/rest/v1/users?id_number=eq.${encodeURIComponent(user.idNumber)}&select=approval_status`, {
+                    headers: window.SupabaseService.getHeaders()
+                });
+                if (checkRes.ok) {
+                    const rows = await checkRes.json();
+                    if (rows && rows.length > 0) {
+                        currentStatus = rows[0].approval_status;
+                    }
+                }
+            } catch (supErr) {
+                console.warn('[LiveCheck] Supabase check error:', supErr);
+            }
+        }
+
+        // 2. Fall back to local Express server
+        if (!currentStatus) {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(`${API_BASE}/user-status?idNumber=${encodeURIComponent(user.idNumber)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(tid);
+            if (res.ok) {
+                const data = await res.json();
+                currentStatus = data.status;
+            }
+        }
+
+        if (currentStatus) {
+            user.status = currentStatus;
             localStorage.setItem('proSportsUser', JSON.stringify(user));
             refreshUI();
 
             if (user.status === 'approved') {
                 showInteractiveAccessModal(user, 'approved');
-                showInteractiveToast('Access Allowed!', `Your ${user.role} account was approved by the Admin! Unlocking dashboard...`, 'success');
+                showInteractiveToast('Access Allowed!', `Your ${user.role} account has been verified! Unlocking dashboard...`, 'success');
                 setTimeout(() => {
                     closeAccessNoticeModal();
                     routeUserDashboard(user);
                 }, 1300);
             } else if (user.status === 'denied') {
                 showInteractiveAccessModal(user, 'denied');
-                showInteractiveToast('Account Denied', 'Your account registration was rejected by the League Administrator.', 'danger');
+                showInteractiveToast('Account Denied', 'Your account registration was not approved by the League Administrator.', 'danger');
             } else {
-                showInteractiveToast('Verification In Progress', 'Your account is still pending review. You can approve it from the Admin Portal.', 'warning');
+                showInteractiveToast('Verification In Progress', 'Your account is currently awaiting administrator review.', 'warning');
             }
+        } else {
+            showInteractiveToast('Status Check Failed', 'Could not verify status. Please check your internet connection.', 'danger');
         }
     } catch (err) {
         showInteractiveToast('Connection Error', 'Could not reach server to verify status.', 'danger');
@@ -348,15 +381,43 @@ async function verifyUserApprovalLive(user) {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/user-status?idNumber=${encodeURIComponent(user.idNumber)}`);
-        if (res.ok) {
-            const data = await res.json();
-            user.status = data.status;
+        let currentStatus = null;
+        if (window.SupabaseService && (!window.CONFIG || window.CONFIG.USE_DIRECT_SUPABASE)) {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 4000);
+            const checkRes = await fetch(`${window.SupabaseService.URL}/rest/v1/users?id_number=eq.${encodeURIComponent(user.idNumber)}&select=approval_status`, {
+                headers: window.SupabaseService.getHeaders(),
+                signal: controller.signal
+            });
+            clearTimeout(tid);
+            if (checkRes.ok) {
+                const rows = await checkRes.json();
+                if (rows && rows.length > 0) {
+                    currentStatus = rows[0].approval_status;
+                }
+            }
+        }
+
+        if (!currentStatus) {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch(`${API_BASE}/user-status?idNumber=${encodeURIComponent(user.idNumber)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(tid);
+            if (res.ok) {
+                const data = await res.json();
+                currentStatus = data.status;
+            }
+        }
+
+        if (currentStatus) {
+            user.status = currentStatus;
             localStorage.setItem('proSportsUser', JSON.stringify(user));
             refreshUI();
         }
     } catch (e) {
-        console.warn("Server offline, using cached status");
+        console.warn("Status check failed, using cached status", e);
     }
 
     if (user.status === 'pending') {

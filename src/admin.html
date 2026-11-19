@@ -40,7 +40,7 @@
 	</head>
 	<body class="bg-slate-100 font-sans text-gray-800 min-h-screen">
 		<!-- Toast Container -->
-		<div id="toastBox" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+		<div id="toastBox" class="fixed top-8 left-4 right-4 md:left-auto md:right-5 md:top-5 z-[9999] flex flex-col items-center md:items-end gap-2 pointer-events-none"></div>
 
 		<!-- ================= 4-DIGIT PIN LOCK SCREEN ================= -->
 		<div id="pinScreen" class="fixed inset-0 z-40 bg-blue-950 flex items-center justify-center p-4">
@@ -342,6 +342,8 @@
 		</div>
 
 		<!-- Configuration & Scripts -->
+		<script src="supabase.js"></script>
+		<script src="supabase-service.js"></script>
 		<script src="config.js"></script>
 		<script>
 			// Universal API Base URL from centralized config
@@ -450,10 +452,21 @@
 				document.getElementById('pinErrorMsg').classList.add('hidden');
 			}
 
-			// Toast notifications
+			// Toast notifications with debouncing and stack limit
+			let lastToastMsg = '';
+			let lastToastTime = 0;
 			function showToast(message, type = 'success') {
+				const now = Date.now();
+				if (lastToastMsg === message && now - lastToastTime < 3000) return;
+				lastToastMsg = message;
+				lastToastTime = now;
+
 				const container = document.getElementById('toastBox');
 				if (!container) return;
+
+				while (container.children.length >= 2) {
+					container.removeChild(container.firstChild);
+				}
 
 				const toast = document.createElement('div');
 				const colors = {
@@ -473,27 +486,53 @@
 				}, 3500);
 			}
 
-			// Load registrations from backend
+			// Load registrations from Supabase Cloud or backend
 			async function loadRegistrations() {
 				const spin = document.getElementById('refreshSpin');
 				if (spin) spin.classList.add('fa-spin');
 
-				try {
-					const res = await fetch(`${API_BASE}/admin/registrations`, {
-						headers: getAdminHeaders()
-					});
-					if (res.ok) {
-						const data = await res.json();
-						registrations = data.users || [];
+				let loaded = false;
+
+				// 1. Direct Supabase Cloud Database Query
+				if (window.SupabaseService && typeof window.SupabaseService.getAllUsers === 'function') {
+					try {
+						const users = await window.SupabaseService.getAllUsers();
+						registrations = users || [];
 						updateMetrics();
 						renderTable();
+						loaded = true;
+					} catch (supErr) {
+						console.warn("Supabase direct load failed, falling back to local server", supErr);
 					}
-				} catch (err) {
-					console.warn("Server offline", err);
-					showToast("Cannot connect to server at " + API_BASE, "danger");
-				} finally {
-					if (spin) spin.classList.remove('fa-spin');
 				}
+
+				// 2. Fall back to Express API if Supabase query did not succeed
+				if (!loaded) {
+					try {
+						const controller = new AbortController();
+						const tid = setTimeout(() => controller.abort(), 5000);
+						const res = await fetch(`${API_BASE}/admin/registrations`, {
+							headers: getAdminHeaders(),
+							signal: controller.signal
+						});
+						clearTimeout(tid);
+						if (res.ok) {
+							const data = await res.json();
+							registrations = data.users || [];
+							updateMetrics();
+							renderTable();
+							loaded = true;
+						}
+					} catch (err) {
+						console.warn("Local API server offline", err);
+					}
+				}
+
+				if (!loaded) {
+					showToast("Unable to connect to database. Please check your internet connection.", "danger");
+				}
+
+				if (spin) spin.classList.remove('fa-spin');
 			}
 
 			function updateMetrics() {
@@ -622,48 +661,84 @@
 
 			// Admin change status
 			async function changeStatus(idNumber, status, name) {
-				try {
-					const res = await fetch(`${API_BASE}/admin/update-status`, {
-						method: 'POST',
-						headers: getAdminHeaders(),
-						body: JSON.stringify({ idNumber, status })
-					});
+				let updated = false;
 
-					if (res.ok) {
-						const target = registrations.find(u => u.idNumber === idNumber);
-						if (target) target.status = status;
-						updateMetrics();
-						renderTable();
-
-						if (status === 'approved') {
-							showToast(`Allowed & Approved: ${name} now has full account access!`, 'success');
-						} else {
-							showToast(`Access Denied: ${name}'s account has been blocked.`, 'danger');
-						}
+				// 1. Direct Supabase Cloud update
+				if (window.SupabaseService && typeof window.SupabaseService.updateUserStatus === 'function') {
+					try {
+						await window.SupabaseService.updateUserStatus(idNumber, status);
+						updated = true;
+					} catch (supErr) {
+						console.warn("Supabase status update error:", supErr);
 					}
-				} catch (err) {
-					showToast("Error updating status on server", "danger");
+				}
+
+				// 2. Fall back to Express API if needed
+				if (!updated) {
+					try {
+						const res = await fetch(`${API_BASE}/admin/update-status`, {
+							method: 'POST',
+							headers: getAdminHeaders(),
+							body: JSON.stringify({ idNumber, status })
+						});
+						if (res.ok) updated = true;
+					} catch (err) {
+						console.warn("API update status error:", err);
+					}
+				}
+
+				if (updated) {
+					const target = registrations.find(u => u.idNumber === idNumber);
+					if (target) target.status = status;
+					updateMetrics();
+					renderTable();
+
+					if (status === 'approved') {
+						showToast(`Allowed & Approved: ${name} now has full account access!`, 'success');
+					} else {
+						showToast(`Access Denied: ${name}'s account has been restricted.`, 'danger');
+					}
+				} else {
+					showToast("Error updating status on server/database", "danger");
 				}
 			}
 
 			async function deleteEntry(idNumber, name) {
 				if (!confirm(`Delete registration for ${name}?`)) return;
 
-				try {
-					const res = await fetch(`${API_BASE}/admin/delete-registration`, {
-						method: 'POST',
-						headers: getAdminHeaders(),
-						body: JSON.stringify({ idNumber })
-					});
+				let deleted = false;
 
-					if (res.ok) {
-						registrations = registrations.filter(u => u.idNumber !== idNumber);
-						updateMetrics();
-						renderTable();
-						showToast(`Removed registration for ${name}`, 'warning');
+				// 1. Direct Supabase Cloud delete
+				if (window.SupabaseService && typeof window.SupabaseService.deleteUser === 'function') {
+					try {
+						await window.SupabaseService.deleteUser(idNumber);
+						deleted = true;
+					} catch (supErr) {
+						console.warn("Supabase delete error:", supErr);
 					}
-				} catch (err) {
-					showToast("Could not delete from server", "danger");
+				}
+
+				// 2. Fall back to Express API if needed
+				if (!deleted) {
+					try {
+						const res = await fetch(`${API_BASE}/admin/delete-registration`, {
+							method: 'POST',
+							headers: getAdminHeaders(),
+							body: JSON.stringify({ idNumber })
+						});
+						if (res.ok) deleted = true;
+					} catch (err) {
+						console.warn("API delete error:", err);
+					}
+				}
+
+				if (deleted) {
+					registrations = registrations.filter(u => u.idNumber !== idNumber);
+					updateMetrics();
+					renderTable();
+					showToast(`Removed registration for ${name}`, 'warning');
+				} else {
+					showToast("Could not delete from server/database", "danger");
 				}
 			}
 
@@ -681,25 +756,47 @@
 				const idNumber = document.getElementById('newApplicantId').value.trim();
 				const role = document.getElementById('newApplicantRole').value;
 
-				try {
-					const res = await fetch(`${API_BASE}/register`, {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ name, email, idNumber, role })
-					});
-					if (res.ok) {
-						closeAddApplicantModal();
-						showToast(`New ${role} "${name}" registered as Pending!`, 'success');
-						loadRegistrations();
-						document.getElementById('newApplicantName').value = '';
-						document.getElementById('newApplicantEmail').value = '';
-						document.getElementById('newApplicantId').value = '';
-					} else {
-						const err = await res.json();
-						showToast(err.error || "Failed to register", "danger");
+				let registered = false;
+				let errMsg = "Failed to register";
+
+				// 1. Direct Supabase Cloud
+				if (window.SupabaseService && typeof window.SupabaseService.registerUser === 'function') {
+					try {
+						await window.SupabaseService.registerUser({ name, email, idNumber, role });
+						registered = true;
+					} catch (supErr) {
+						errMsg = supErr.message || errMsg;
 					}
-				} catch (err) {
-					showToast("Server error", "danger");
+				}
+
+				// 2. Fall back to Express API if needed
+				if (!registered) {
+					try {
+						const res = await fetch(`${API_BASE}/register`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ name, email, idNumber, role })
+						});
+						if (res.ok) {
+							registered = true;
+						} else {
+							const err = await res.json().catch(() => ({}));
+							errMsg = err.error || errMsg;
+						}
+					} catch (err) {
+						console.warn("API register error:", err);
+					}
+				}
+
+				if (registered) {
+					closeAddApplicantModal();
+					showToast(`New ${role} "${name}" registered as Pending!`, 'success');
+					loadRegistrations();
+					document.getElementById('newApplicantName').value = '';
+					document.getElementById('newApplicantEmail').value = '';
+					document.getElementById('newApplicantId').value = '';
+				} else {
+					showToast(errMsg, "danger");
 				}
 			}
 		</script>

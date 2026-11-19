@@ -13,6 +13,75 @@ let activePublicSportFilter = 'all';
 let currentDetailEvent = null;
 let currentRegisteringEvent = null;
 
+// Automatically probe and connect to active backend URL
+async function resolveActiveBackendUrl() {
+    const saved = localStorage.getItem('sportsconnect_api_override');
+    if (saved && saved.trim()) {
+        API_BASE = saved.trim().replace(/\/+$/, '');
+        return API_BASE;
+    }
+
+    const isNative = window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+    const candidateSet = new Set();
+
+    if (isNative) {
+        // Native mobile candidates:
+        if (window.CONFIG && window.CONFIG.DEV_LAN_API_URL) candidateSet.add(window.CONFIG.DEV_LAN_API_URL.replace(/\/+$/, ''));
+        candidateSet.add('http://10.85.77.243:3000'); // Active LAN Wi-Fi host
+        candidateSet.add('http://10.63.225.244:3000');
+        candidateSet.add('http://10.0.2.2:3000'); // Android emulator loopback
+        candidateSet.add('http://10.10.12.0:3000');
+    } else {
+        // Web browser candidates:
+        if (window.location && window.location.origin && window.location.origin.startsWith('http') && !window.location.origin.includes(':8080')) {
+            candidateSet.add(window.location.origin.replace(/\/+$/, ''));
+        }
+        candidateSet.add('http://localhost:3000');
+        candidateSet.add('http://127.0.0.1:3000');
+        if (window.CONFIG && window.CONFIG.DEV_LAN_API_URL) candidateSet.add(window.CONFIG.DEV_LAN_API_URL.replace(/\/+$/, ''));
+        candidateSet.add('http://10.85.77.243:3000');
+        candidateSet.add('http://10.10.12.0:3000');
+    }
+
+    const candidates = Array.from(candidateSet);
+
+    // Fast parallel probe with Promise.any
+    const probe = async (url) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        try {
+            const res = await fetch(`${url}/health`, { method: 'GET', signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.status === 'ok') return url;
+            }
+        } catch (e) {
+            clearTimeout(timeoutId);
+        }
+        throw new Error(`Probe failed for ${url}`);
+    };
+
+    try {
+        const fastest = await Promise.any(candidates.map(probe));
+        if (fastest) {
+            console.log('[SportsConnect] Connected to active backend:', fastest);
+            API_BASE = fastest;
+            const dot = document.getElementById('navServerPingDot');
+            const mDot = document.getElementById('mobileServerPingDot');
+            const txt = document.getElementById('navServerPingText');
+            if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+            if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+            if (txt) txt.innerText = 'Backend Online';
+            return fastest;
+        }
+    } catch (e) {
+        // All probes failed or timed out
+    }
+
+    return API_BASE;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     refreshUI();
 
@@ -24,8 +93,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('marathonDashboard').classList.add('hidden');
     }
 
-    // Automatically load all public sports events on page launch (no login required)
-    loadPublicEvents();
+    // Automatically probe backend connection and load public events
+    resolveActiveBackendUrl().then(() => {
+        loadPublicEvents();
+    }).catch(() => {
+        loadPublicEvents();
+    });
 
     // Hero Section SPORTS Button
     const sportsBtn = document.getElementById('heroSportsBtn') || document.querySelector('a[href="#register"]:last-child');
@@ -366,27 +439,64 @@ function openStatusCheckModal() {
 }
 
 function returnToHome() {
-    document.getElementById('sportsDashboard').classList.add('hidden');
-    document.getElementById('officialsDashboard').classList.add('hidden');
-    document.getElementById('marathonDashboard').classList.add('hidden');
-    document.querySelector('header').classList.remove('hidden');
+    const sportsDash = document.getElementById('sportsDashboard');
+    if (sportsDash) sportsDash.classList.add('hidden');
+    const offDash = document.getElementById('officialsDashboard');
+    if (offDash) offDash.classList.add('hidden');
+    const maraDash = document.getElementById('marathonDashboard');
+    if (maraDash) maraDash.classList.add('hidden');
+
+    const header = document.querySelector('header');
+    if (header) header.classList.remove('hidden');
+
     const pubSec = document.getElementById('publicEventsSection');
-    if (pubSec) pubSec.classList.remove('hidden');
-    document.querySelector('#register').classList.remove('hidden');
-    if (document.querySelector('footer')) document.querySelector('footer').classList.remove('hidden');
+    const regSec = document.querySelector('#register');
+    const isMobile = window.innerWidth < 768;
+
+    if (isMobile) {
+        // Mobile Homepage: strictly hide upcoming events & disciplines on homepage
+        if (pubSec) pubSec.classList.add('hidden');
+        if (regSec) regSec.classList.add('hidden');
+    } else {
+        // Desktop website: keep sections visible as before
+        if (pubSec) pubSec.classList.remove('hidden');
+        if (regSec) regSec.classList.remove('hidden');
+    }
+
+    const footer = document.querySelector('footer');
+    if (footer) footer.classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    loadPublicEvents();
 }
 
 // Scroll down smoothly to Public Sports Events Section
 function scrollToPublicEvents() {
-    returnToHome();
+    const sportsDash = document.getElementById('sportsDashboard');
+    if (sportsDash) sportsDash.classList.add('hidden');
+    const offDash = document.getElementById('officialsDashboard');
+    if (offDash) offDash.classList.add('hidden');
+    const maraDash = document.getElementById('marathonDashboard');
+    if (maraDash) maraDash.classList.add('hidden');
+
     const pubSec = document.getElementById('publicEventsSection');
-    if (pubSec) {
-        setTimeout(() => {
+    const header = document.querySelector('header');
+    const isMobile = window.innerWidth < 768;
+
+    if (isMobile) {
+        // On mobile, show separate Upcoming Sports Events & Tournaments view
+        if (pubSec) {
+            pubSec.classList.remove('hidden');
+            if (header) header.classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    } else {
+        // On desktop, keep website layout and scroll smoothly
+        if (header) header.classList.remove('hidden');
+        if (pubSec) {
+            pubSec.classList.remove('hidden');
             pubSec.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        }
     }
+    loadPublicEvents();
 }
 
 // Handler for Hero Sports button
@@ -544,6 +654,28 @@ async function loadPublicEvents() {
     const grid = document.getElementById('publicEventsGrid');
     const noMsg = document.getElementById('noPublicEventsMsg');
     if (!grid) return;
+
+    // Direct Supabase Cloud Connection (Zero local server or Wi-Fi required)
+    if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+        try {
+            const events = await window.SupabaseService.getPublicEvents();
+            if (Array.isArray(events) && events.length > 0) {
+                cachedPublicEvents = events;
+                renderPublicEventsGrid(cachedPublicEvents);
+
+                // Update server status dot to green
+                const dot = document.getElementById('navServerPingDot');
+                const mDot = document.getElementById('mobileServerPingDot');
+                const txt = document.getElementById('navServerPingText');
+                if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+                if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+                if (txt) txt.innerText = 'Supabase Cloud';
+                return;
+            }
+        } catch (supabaseErr) {
+            console.warn('[Direct Supabase] Query error, falling back to API_BASE:', supabaseErr);
+        }
+    }
 
     try {
         const controller = new AbortController();
@@ -1018,15 +1150,36 @@ async function submitAthleteEventRegistration(e) {
             role: user.role
         };
 
-        const res = await fetch(`${API_BASE}/events/${currentRegisteringEvent.id}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        let regResult = null;
+        let regError = null;
 
-        const data = await res.json();
+        // Priority 1: Direct Supabase Cloud Registration
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                regResult = await window.SupabaseService.registerAthlete(currentRegisteringEvent.id, payload);
+            } catch (supErr) {
+                regError = supErr.message;
+                console.warn('[Direct Supabase] Athlete reg error:', supErr);
+            }
+        }
 
-        if (res.ok) {
+        // Priority 2: Express Server Fallback
+        if (!regResult && !regError) {
+            try {
+                const res = await fetch(`${API_BASE}/events/${currentRegisteringEvent.id}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok) regResult = data;
+                else regError = data.error;
+            } catch (e) {
+                // API unreachable
+            }
+        }
+
+        if (regResult) {
             showInteractiveToast('Registration Successful!', `You are successfully registered for "${currentRegisteringEvent.name}"!`, 'success');
             closeAthleteEventRegisterModal();
 
@@ -1035,10 +1188,10 @@ async function submitAthleteEventRegistration(e) {
             if (user.role === 'Official') loadOfficialHostedEvents();
         } else {
             if (errorBanner) {
-                errorBanner.innerText = data.error || 'Registration failed. Please check your inputs.';
+                errorBanner.innerText = regError || 'Registration failed. Please check your inputs.';
                 errorBanner.classList.remove('hidden');
             }
-            showInteractiveToast('Registration Error', data.error || 'Could not complete registration.', 'danger');
+            showInteractiveToast('Registration Error', regError || 'Could not complete registration.', 'danger');
         }
     } catch (err) {
         showInteractiveToast('Connection Error', 'Backend server is offline or unreachable.', 'danger');
@@ -1061,14 +1214,28 @@ async function loadOfficialHostedEvents() {
     grid.innerHTML = '<div class="col-span-3 text-center py-12 text-gray-400 font-bold"><i class="fas fa-spinner fa-spin mr-2"></i>Loading your hosted events...</div>';
 
     try {
-        const res = await fetch(`${API_BASE}/events`);
-        if (res.ok) {
-            const allEvents = await res.json();
-            // Filter strictly for events hosted by this official
-            const myEvents = (user && user.idNumber)
-                ? allEvents.filter(e => (e.officialId || '').toLowerCase() === user.idNumber.toLowerCase() || (user.email && (e.officialEmail || '').toLowerCase() === user.email.toLowerCase()))
-                : [];
+        let myEvents = null;
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                if (user && user.idNumber) {
+                    myEvents = await window.SupabaseService.getHostedEvents(user.idNumber);
+                }
+            } catch (e) {
+                console.warn('[Direct Supabase] getHostedEvents error:', e);
+            }
+        }
 
+        if (!myEvents) {
+            const res = await fetch(`${API_BASE}/events`);
+            if (res.ok) {
+                const allEvents = await res.json();
+                myEvents = (user && user.idNumber)
+                    ? allEvents.filter(e => (e.officialId || '').toLowerCase() === user.idNumber.toLowerCase() || (user.email && (e.officialEmail || '').toLowerCase() === user.email.toLowerCase()))
+                    : [];
+            }
+        }
+
+        if (myEvents) {
             cachedHostedEvents = myEvents;
             if (countEl) countEl.innerText = cachedHostedEvents.length;
 
@@ -1165,9 +1332,23 @@ async function loadOfficialAllEvents() {
     grid.innerHTML = '<div class="col-span-3 text-center py-12 text-gray-400 font-bold"><i class="fas fa-spinner fa-spin mr-2"></i>Loading all league events...</div>';
 
     try {
-        const res = await fetch(`${API_BASE}/events`);
-        if (res.ok) {
-            const allEvents = await res.json();
+        let allEvents = null;
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                allEvents = await window.SupabaseService.getPublicEvents();
+            } catch (e) {
+                console.warn('[Direct Supabase] getPublicEvents error:', e);
+            }
+        }
+
+        if (!allEvents) {
+            const res = await fetch(`${API_BASE}/events`);
+            if (res.ok) {
+                allEvents = await res.json();
+            }
+        }
+
+        if (allEvents) {
             cachedAllOfficialEvents = Array.isArray(allEvents) ? allEvents : [];
             if (countEl) countEl.innerText = cachedAllOfficialEvents.length;
 
@@ -1290,20 +1471,42 @@ async function openViewRegistrationsModal(eventId) {
     document.getElementById('officialRegistrationsModal').classList.remove('hidden');
 
     try {
-        const res = await fetch(`${API_BASE}/events/${eventId}/registrations?officialId=${encodeURIComponent(user.idNumber || '')}`, {
-            headers: {
-                'x-user-id-number': user.idNumber || ''
-            }
-        });
+        let roster = null;
 
-        if (res.status === 403) {
-            closeOfficialRegistrationsModal();
-            showInteractiveToast('Access Restricted', 'Only the official who hosted this event is authorized to view its athlete registrations.', 'danger');
-            return;
+        // Priority 1: Direct Supabase Cloud Service
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                roster = await window.SupabaseService.getEventRegistrations(eventId, user.idNumber);
+            } catch (supErr) {
+                if (supErr.message && supErr.message.includes('Access denied')) {
+                    closeOfficialRegistrationsModal();
+                    showInteractiveToast('Access Restricted', supErr.message, 'danger');
+                    return;
+                }
+                console.warn('[Direct Supabase] getEventRegistrations fallback:', supErr);
+            }
         }
 
-        if (res.ok) {
-            const roster = await res.json();
+        // Priority 2: Express Server Fallback
+        if (!roster) {
+            const res = await fetch(`${API_BASE}/events/${eventId}/registrations?officialId=${encodeURIComponent(user.idNumber || '')}`, {
+                headers: {
+                    'x-user-id-number': user.idNumber || ''
+                }
+            });
+
+            if (res.status === 403) {
+                closeOfficialRegistrationsModal();
+                showInteractiveToast('Access Restricted', 'Only the official who hosted this event is authorized to view its athlete registrations.', 'danger');
+                return;
+            }
+
+            if (res.ok) {
+                roster = await res.json();
+            }
+        }
+
+        if (roster) {
             cachedActiveRoster = Array.isArray(roster) ? roster : [];
             currentManagedEvent.registrations = cachedActiveRoster;
 
@@ -1313,7 +1516,7 @@ async function openViewRegistrationsModal(eventId) {
             tbody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-rose-500 font-bold">Failed to load roster.</td></tr>';
         }
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-rose-500 font-bold">Server connection error.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="py-12 text-center text-rose-500 font-bold">Could not load roster.</td></tr>';
     }
 }
 
@@ -1426,20 +1629,40 @@ async function updateAthleteRegistrationStatus(eventId, regId, newStatus) {
     if (!user) return;
 
     try {
-        const res = await fetch(`${API_BASE}/events/${eventId}/registrations/${regId}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus, officialId: user.idNumber })
-        });
+        let updated = false;
 
-        const data = await res.json();
-        if (res.ok) {
+        // Priority 1: Direct Supabase Cloud Service
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                await window.SupabaseService.updateRegistrationStatus(regId, newStatus);
+                updated = true;
+            } catch (e) {
+                console.warn('[Direct Supabase] updateRegistrationStatus fallback:', e);
+            }
+        }
+
+        // Priority 2: Express Server Fallback
+        if (!updated) {
+            const res = await fetch(`${API_BASE}/events/${eventId}/registrations/${regId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus, officialId: user.idNumber })
+            });
+
+            if (res.ok) {
+                updated = true;
+            } else {
+                const data = await res.json().catch(() => ({}));
+                showInteractiveToast('Update Failed', data.error || 'Failed to update status.', 'danger');
+                return;
+            }
+        }
+
+        if (updated) {
             const reg = cachedActiveRoster.find(r => String(r.id) === String(regId));
             if (reg) reg.status = newStatus;
             updateRosterCounts();
             showInteractiveToast('Status Updated', `Registration status updated to ${newStatus}.`, 'success');
-        } else {
-            showInteractiveToast('Update Failed', data.error || 'Could not update status.', 'danger');
         }
     } catch (err) {
         showInteractiveToast('Error', 'Server connection failure.', 'danger');
@@ -1536,18 +1759,57 @@ function exportCurrentEventCSV(eventId) {
 }
 
 // ================= AUTH MODAL & FORM SWITCHER =================
+function setLoginAlert(message, type = 'danger') {
+    const el = document.getElementById('loginInlineAlert');
+    if (!el) return;
+    if (!message) {
+        el.classList.add('hidden');
+        el.innerHTML = '';
+        return;
+    }
+    const styles = {
+        danger: 'bg-rose-50 text-rose-800 border border-rose-200',
+        warning: 'bg-amber-50 text-amber-800 border border-amber-200',
+        success: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+        info: 'bg-blue-50 text-blue-800 border border-blue-200'
+    };
+    el.className = `p-3 rounded-xl text-xs font-bold leading-relaxed ${styles[type] || styles.danger}`;
+    el.innerHTML = message;
+    el.classList.remove('hidden');
+}
+
+function setRegisterAlert(message, type = 'danger') {
+    const el = document.getElementById('registerInlineAlert');
+    if (!el) return;
+    if (!message) {
+        el.classList.add('hidden');
+        el.innerHTML = '';
+        return;
+    }
+    const styles = {
+        danger: 'bg-rose-50 text-rose-800 border border-rose-200',
+        warning: 'bg-amber-50 text-amber-800 border border-amber-200',
+        success: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+        info: 'bg-blue-50 text-blue-800 border border-blue-200'
+    };
+    el.className = `p-3 rounded-xl text-xs font-bold leading-relaxed ${styles[type] || styles.danger}`;
+    el.innerHTML = message;
+    el.classList.remove('hidden');
+}
+
 function openDirectLogin(role) {
-    currentSelectedRole = role;
-    showDetailsForm(role);
+    currentSelectedRole = role || 'Athlete';
+    showDetailsForm(currentSelectedRole, 'login');
     document.getElementById('authModal').classList.remove('hidden');
 }
 
-function showDetailsForm(role) {
-    currentSelectedRole = role;
+function showDetailsForm(role, initialMode = 'login') {
+    currentSelectedRole = role || 'Athlete';
     document.getElementById('step1').classList.add('hidden');
     document.getElementById('step2').classList.remove('hidden');
     document.getElementById('formTitle').innerText = `${role} Portal`;
     document.getElementById('modalSubTitle').innerText = `Portal: ${role}`;
+    setAuthMode(initialMode);
 }
 
 function setAuthMode(mode) {
@@ -1555,6 +1817,10 @@ function setAuthMode(mode) {
     const btnLog = document.getElementById('tabAuthLogin');
     const regGroup = document.getElementById('registerFieldsGroup');
     const logGroup = document.getElementById('loginFieldsGroup');
+
+    // Clear any previous alerts
+    setLoginAlert('');
+    setRegisterAlert('');
 
     if (mode === 'register') {
         btnReg.className = 'flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg bg-white text-blue-900 shadow-sm transition';
@@ -1575,7 +1841,9 @@ function resetModal() {
     document.getElementById('step1').classList.remove('hidden');
     document.getElementById('step2').classList.add('hidden');
     document.getElementById('modalSubTitle').innerText = `Official Portal`;
-    setAuthMode('register');
+    setLoginAlert('');
+    setRegisterAlert('');
+    setAuthMode('login');
 }
 
 function hideModal() { 
@@ -1631,6 +1899,9 @@ async function submitRegistration() {
     const emailEl = document.getElementById('uEmail');
     const idEl = document.getElementById('uIdNumber');
     const passEl = document.getElementById('uPassword');
+    const btn = document.getElementById('finalSubmit');
+
+    setRegisterAlert('');
 
     const payload = {
         name: nameEl ? nameEl.value.trim() : '',
@@ -1641,31 +1912,91 @@ async function submitRegistration() {
     };
 
     if (!payload.name || !payload.idNumber || !payload.email) {
+        setRegisterAlert('<i class="fas fa-exclamation-circle mr-1.5"></i> Please fill in all registration fields.', 'warning');
         return showInteractiveToast('Missing Information', 'Please fill in all registration fields.', 'warning');
     }
 
-    try {
-        const response = await fetch(`${API_BASE}/register`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting...';
+    }
 
-        const result = await response.json();
-        if (response.ok) {
-            const registeredUser = result.user || { ...payload, status: 'pending' };
+    try {
+        let registeredUser = null;
+
+        // Priority 1: Direct Supabase Cloud Registration
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                registeredUser = await window.SupabaseService.registerUser(payload);
+            } catch (supErr) {
+                if (supErr.message && (supErr.message.includes('already registered') || supErr.message.includes('Please provide'))) {
+                    setRegisterAlert(`<i class="fas fa-ban mr-1.5"></i> ${supErr.message}`, 'danger');
+                    showInteractiveToast('Registration Blocked', supErr.message, 'danger');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>Verify & Complete</span> <i class="fas fa-arrow-right ml-2"></i>';
+                    }
+                    return;
+                }
+                console.warn('[Direct Supabase] Registration fallback to API:', supErr);
+            }
+        }
+
+        // Priority 2: Express Server Fallback
+        if (!registeredUser && API_BASE) {
+            try {
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 5000);
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(tid);
+
+                const result = await response.json();
+                if (response.ok) {
+                    registeredUser = result.user || { ...payload, status: 'pending' };
+                } else {
+                    const msg = result.error || 'Registration failed.';
+                    setRegisterAlert(`<i class="fas fa-ban mr-1.5"></i> ${msg}`, 'danger');
+                    showInteractiveToast('Registration Blocked', msg, 'danger');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>Verify & Complete</span> <i class="fas fa-arrow-right ml-2"></i>';
+                    }
+                    return;
+                }
+            } catch (netErr) {
+                console.warn('[Express Fallback] Register fetch failed:', netErr);
+            }
+        }
+
+        if (registeredUser) {
+            setRegisterAlert('<i class="fas fa-check-circle mr-1.5"></i> Registration submitted successfully!', 'success');
             localStorage.setItem('proSportsUser', JSON.stringify(registeredUser));
             
-            hideModal();
-            refreshUI();
-
-            showInteractiveAccessModal(registeredUser, 'pending');
-            showInteractiveToast('Registration Submitted', 'Your account is currently awaiting Admin approval.', 'warning');
+            setTimeout(() => {
+                hideModal();
+                refreshUI();
+                showInteractiveAccessModal(registeredUser, 'pending');
+                showInteractiveToast('Registration Submitted', 'Your account is currently awaiting Admin approval.', 'warning');
+            }, 500);
         } else {
-            showInteractiveToast('Registration Blocked', result.error, 'danger');
+            setRegisterAlert('<i class="fas fa-exclamation-triangle mr-1.5"></i> Could not connect to database. Please check your internet connection.', 'danger');
+            showInteractiveToast('Connection Error', 'Failed to reach cloud database.', 'danger');
         }
     } catch (err) { 
-        showInteractiveToast('Server Offline', 'Backend server is not responding.', 'danger');
+        setRegisterAlert(`<i class="fas fa-exclamation-circle mr-1.5"></i> ${err.message || 'Failed to submit registration.'}`, 'danger');
+        showInteractiveToast('Registration Error', err.message || 'Failed to submit registration.', 'danger');
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Verify & Complete</span> <i class="fas fa-arrow-right ml-2"></i>';
+            }, 800);
+        }
     }
 }
 
@@ -1673,21 +2004,91 @@ async function submitRegistration() {
 async function submitLogin() {
     const idEl = document.getElementById('loginIdentifier');
     const passEl = document.getElementById('loginPassword');
+    const btn = document.getElementById('btnLoginSubmit');
     const identifier = idEl ? idEl.value.trim() : '';
     const password = passEl ? passEl.value : '';
 
-    if (!identifier) return showInteractiveToast('Input Required', 'Please enter your Email or ID Number.', 'warning');
+    setLoginAlert('');
+
+    if (!identifier) {
+        setLoginAlert('<i class="fas fa-exclamation-circle mr-1.5"></i> Please enter your Email or ID Number.', 'warning');
+        showInteractiveToast('Input Required', 'Please enter your Email or ID Number.', 'warning');
+        if (idEl) idEl.focus();
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Signing In...';
+    }
 
     try {
-        const res = await fetch(`${API_BASE}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier, role: currentSelectedRole, password })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            const user = data.user;
-            localStorage.setItem('proSportsUser', JSON.stringify(user));
+        let user = null;
+
+        // Priority 1: Direct Supabase Cloud Login (Fast, Direct Cloud Access)
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                const res = await window.SupabaseService.login(identifier, currentSelectedRole);
+                user = res.user;
+            } catch (supErr) {
+                console.warn('[Direct Supabase] Login attempt error:', supErr);
+                if (supErr.message && (supErr.message.includes('No registration found') || supErr.message.includes('registered as an'))) {
+                    setLoginAlert(`<i class="fas fa-times-circle mr-1.5"></i> ${supErr.message}`, 'danger');
+                    showInteractiveToast('Login Failed', supErr.message, 'danger');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>Sign In to Account</span> <i class="fas fa-sign-in-alt ml-2"></i>';
+                    }
+                    return;
+                }
+            }
+        }
+
+        // Priority 2: Express Server Fallback (Fast 4s Timeout)
+        if (!user && API_BASE) {
+            try {
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 4000);
+                const res = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier, role: currentSelectedRole, password }),
+                    signal: controller.signal
+                });
+                clearTimeout(tid);
+                const data = await res.json();
+                if (res.ok && data.user) {
+                    user = data.user;
+                } else {
+                    const msg = data.error || 'Account not found.';
+                    setLoginAlert(`<i class="fas fa-times-circle mr-1.5"></i> ${msg}`, 'danger');
+                    showInteractiveToast('Login Failed', msg, 'danger');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>Sign In to Account</span> <i class="fas fa-sign-in-alt ml-2"></i>';
+                    }
+                    return;
+                }
+            } catch (fetchErr) {
+                console.warn('[Express Fallback] Login fetch failed:', fetchErr);
+            }
+        }
+
+        if (!user) {
+            setLoginAlert('<i class="fas fa-exclamation-triangle mr-1.5"></i> Could not connect to server or database. Please check your internet connection.', 'danger');
+            showInteractiveToast('Connection Error', 'Unable to reach backend server or Supabase cloud.', 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Sign In to Account</span> <i class="fas fa-sign-in-alt ml-2"></i>';
+            }
+            return;
+        }
+
+        // Login Succeeded
+        setLoginAlert(`<i class="fas fa-check-circle mr-1.5"></i> Welcome back, ${user.name}! Logging you in...`, 'success');
+        localStorage.setItem('proSportsUser', JSON.stringify(user));
+
+        setTimeout(() => {
             hideModal();
             refreshUI();
 
@@ -1720,11 +2121,19 @@ async function submitLogin() {
 
                 routeUserDashboard(user);
             }
-        } else {
-            showInteractiveToast('Login Failed', data.error || 'Account not found.', 'danger');
-        }
+        }, 400);
+
     } catch (err) {
-        showInteractiveToast('Connection Error', 'Backend server is offline.', 'danger');
+        console.error('[Login Error]:', err);
+        setLoginAlert(`<i class="fas fa-exclamation-circle mr-1.5"></i> ${err.message || 'An error occurred during authentication.'}`, 'danger');
+        showInteractiveToast('Connection Error', err.message || 'Failed to authenticate.', 'danger');
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Sign In to Account</span> <i class="fas fa-sign-in-alt ml-2"></i>';
+            }, 800);
+        }
     }
 }
 
@@ -1732,14 +2141,30 @@ async function submitLogin() {
 async function quickLoginPreset(email, role) {
     currentSelectedRole = role;
     try {
-        const res = await fetch(`${API_BASE}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: email, role })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            const user = data.user;
+        let user = null;
+
+        // Priority 1: Direct Supabase Cloud Login
+        if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+            try {
+                const res = await window.SupabaseService.login(email, role);
+                user = res.user;
+            } catch (e) {
+                console.warn('[Direct Supabase] Preset login fallback:', e);
+            }
+        }
+
+        // Priority 2: Express Server Fallback
+        if (!user) {
+            const res = await fetch(`${API_BASE}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifier: email, role })
+            });
+            const data = await res.json();
+            if (res.ok) user = data.user;
+        }
+
+        if (user) {
             localStorage.setItem('proSportsUser', JSON.stringify(user));
             hideModal();
             refreshUI();
@@ -1808,16 +2233,22 @@ async function showTournaments(sportName) {
     tourneyGrid.innerHTML = '<div class="text-center py-8 text-gray-400 font-bold">Loading tournaments...</div>';
 
     let list = allTournaments;
-    try {
-        const res = await fetch(`${API_BASE}/tournaments`);
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-                list = data;
+    if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+        try {
+            const tours = await window.SupabaseService.getTournaments();
+            if (Array.isArray(tours) && tours.length > 0) list = tours;
+        } catch (e) {}
+    }
+    if (list === allTournaments) {
+        try {
+            const res = await fetch(`${API_BASE}/tournaments`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) list = data;
             }
+        } catch (e) {
+            console.warn("Using offline tournament cache");
         }
-    } catch (e) {
-        console.warn("Using offline tournament cache");
     }
 
     tourneyGrid.innerHTML = '';
@@ -1927,12 +2358,21 @@ async function loadMarathons() {
         { id: 3, title: 'Coastal Half Marathon (21K)', date: 'June 12th, 2026', registrations: 53 }
     ];
 
+    if (window.SupabaseService && window.CONFIG && window.CONFIG.USE_DIRECT_SUPABASE) {
+        try {
+            const mars = await window.SupabaseService.getMarathons();
+            if (Array.isArray(mars) && mars.length > 0) marathonsData = mars;
+        } catch (e) {}
+    }
+
     try {
-        const res = await fetch(`${API_BASE}/marathons`);
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-                marathonsData = data;
+        if (marathonsData.length === 3 && marathonsData[0].title === 'National City Marathon 2026') {
+            const res = await fetch(`${API_BASE}/marathons`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    marathonsData = data;
+                }
             }
         }
     } catch(e) {
@@ -2120,6 +2560,15 @@ function initCapacitorPlugins() {
                     return;
                 }
 
+                if (window.innerWidth < 768) {
+                    const pubSec = document.getElementById('publicEventsSection');
+                    const header = document.querySelector('header');
+                    if (pubSec && !pubSec.classList.contains('hidden') && header && header.classList.contains('hidden')) {
+                        returnToHome();
+                        return;
+                    }
+                }
+
                 // Priority 4: Exit App at root
                 window.Capacitor.Plugins.App.exitApp();
             });
@@ -2147,24 +2596,43 @@ async function checkBackendHealthLive(urlToCheck = null) {
     const mDot = document.getElementById('mobileServerPingDot');
     const txt = document.getElementById('navServerPingText');
 
+    // 1. Check direct Supabase Cloud connectivity
+    let supabaseOnline = false;
+    if (window.SupabaseService) {
+        try {
+            supabaseOnline = await window.SupabaseService.testConnection();
+        } catch (e) {}
+    }
+
+    // 2. Check Express server connectivity
+    let serverOnline = false;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(`${targetUrl}/events`, { method: 'GET', signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(`${targetUrl}/health`, { method: 'GET', signal: controller.signal });
         clearTimeout(timeoutId);
+        if (res.ok) serverOnline = true;
+    } catch (e) {}
 
-        if (res.ok) {
-            if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-            if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
-            if (txt) txt.innerText = 'Server Online';
-            return true;
-        } else {
-            throw new Error('Server returned non-200');
-        }
-    } catch (e) {
+    if (serverOnline && supabaseOnline) {
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+        if (txt) txt.innerText = 'Connected (Cloud & LAN)';
+        return true;
+    } else if (supabaseOnline) {
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+        if (txt) txt.innerText = 'Supabase Cloud';
+        return true;
+    } else if (serverOnline) {
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500';
+        if (txt) txt.innerText = 'Server Online';
+        return true;
+    } else {
         if (dot) dot.className = 'w-2 h-2 rounded-full bg-rose-500';
         if (mDot) mDot.className = 'absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500';
-        if (txt) txt.innerText = 'Server Offline';
+        if (txt) txt.innerText = 'Offline';
         return false;
     }
 }
@@ -2266,7 +2734,7 @@ async function testAndSaveServerUrl(overrideUrl = null) {
     } catch (err) {
         if (feedback) {
             feedback.className = 'p-3 rounded-xl text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200';
-            feedback.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> Cannot connect to <strong>${url}</strong>.<br><span class="text-[11px] font-normal">Ensure your PC running "node server.js" and phone are on the same Wi-Fi, or test using the PC Wi-Fi IP (http://10.85.77.243:3000).</span>`;
+            feedback.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> Cannot connect to <strong>${url}</strong>.<br><span class="text-[11px] font-normal">Ensure your PC running "node server.js" and phone are on the same Wi-Fi, or test using the PC Wi-Fi IP (http://10.10.12.0:3000) or Android Emulator (http://10.0.2.2:3000).</span>`;
             feedback.classList.remove('hidden');
         }
         showInteractiveToast('Connection Failed', `Could not reach ${url}`, 'danger');
@@ -2276,4 +2744,49 @@ async function testAndSaveServerUrl(overrideUrl = null) {
             saveBtn.innerHTML = '<i class="fas fa-check-circle text-yellow-400 mr-1"></i> Test & Save';
         }
     }
+}
+
+// Explicit window bindings for hybrid WebView & inline HTML onclick handlers
+if (typeof window !== 'undefined') {
+    window.returnToHome = returnToHome;
+    window.scrollToPublicEvents = scrollToPublicEvents;
+    window.openDirectLogin = openDirectLogin;
+    window.openCurrentDashboard = openCurrentDashboard;
+    window.openStatusCheckModal = openStatusCheckModal;
+    window.handleLogout = handleLogout;
+    window.openServerConfigModal = openServerConfigModal;
+    window.closeServerConfigModal = closeServerConfigModal;
+    window.setPresetServerUrl = setPresetServerUrl;
+    window.resetServerUrlToDefault = resetServerUrlToDefault;
+    window.testAndSaveServerUrl = testAndSaveServerUrl;
+    window.toggleMobileMenu = toggleMobileMenu;
+    window.handleHeroSportsClick = handleHeroSportsClick;
+    window.filterPublicEventsBySport = filterPublicEventsBySport;
+    window.showTournaments = showTournaments;
+    window.backToSports = backToSports;
+    window.switchOfficialTab = switchOfficialTab;
+    window.addCustomFieldRow = addCustomFieldRow;
+    window.openViewRegistrationsModal = openViewRegistrationsModal;
+    window.closeOfficialRegistrationsModal = closeOfficialRegistrationsModal;
+    window.filterRegistrationsByStatus = filterRegistrationsByStatus;
+    window.exportCurrentEventCSV = exportCurrentEventCSV;
+    window.openSingleAthleteDetailModal = openSingleAthleteDetailModal;
+    window.closeSingleAthleteDetailModal = closeSingleAthleteDetailModal;
+    window.openPublicEventDetails = openPublicEventDetails;
+    window.closePublicEventDetailsModal = closePublicEventDetailsModal;
+    window.handlePublicEventRegister = handlePublicEventRegister;
+    window.handlePublicEventRegisterFromModal = handlePublicEventRegisterFromModal;
+    window.closeAthleteEventRegisterModal = closeAthleteEventRegisterModal;
+    window.showDetailsForm = showDetailsForm;
+    window.quickLoginPreset = quickLoginPreset;
+    window.setAuthMode = setAuthMode;
+    window.submitLogin = submitLogin;
+    window.submitRegistration = submitRegistration;
+    window.submitAthleteEventRegistration = submitAthleteEventRegistration;
+    window.resetModal = resetModal;
+    window.hideModal = hideModal;
+    window.checkLiveApprovalStatus = checkLiveApprovalStatus;
+    window.closeAccessNoticeModal = closeAccessNoticeModal;
+    window.updateAthleteRegistrationStatus = updateAthleteRegistrationStatus;
+    window.loadPublicEvents = loadPublicEvents;
 }

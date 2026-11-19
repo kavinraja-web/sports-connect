@@ -414,8 +414,25 @@ function verifyAdmin(req, res, next) {
 }
 
 // ====================================================================
-// HEALTH & DIAGNOSTIC ROUTE
+// HEALTH & DIAGNOSTIC ROUTES
 // ====================================================================
+app.get('/health', async (req, res) => {
+    const dbStatus = await testConnection();
+    res.json({
+        status: 'ok',
+        server: 'SportsConnect Backend API',
+        uptime: process.uptime(),
+        database: isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local In-Memory Mode',
+        dbConnected: dbStatus,
+        port: Number(process.env.PORT || 3000),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/api/status', (req, res) => {
+    res.redirect('/health');
+});
+
 app.get('/api/db-status', async (req, res) => {
     const conn = await testConnection();
     res.json({
@@ -677,6 +694,28 @@ app.post('/admin/login', (req, res) => {
     }
 
     return res.status(401).json({ error: "Invalid admin credentials or PIN." });
+});
+
+// GET /admin/users - Admin user listing
+app.get('/admin/users', verifyAdmin, async (req, res) => {
+    try {
+        if (isSupabaseConfigured()) {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const formatted = (data || []).map(formatUserResponse);
+            return res.json(formatted);
+        } else {
+            return res.json(localUsers);
+        }
+    } catch (err) {
+        console.error('[Error] /admin/users:', err.message);
+        return res.status(500).json({ error: "Failed to retrieve users." });
+    }
 });
 
 // GET /admin/registrations - Retrieve all registrations for admin management
@@ -1122,8 +1161,19 @@ app.post('/events/:id/register', async (req, res) => {
         role 
     } = req.body;
 
+    const finalName = (athleteName || req.body.fullName || req.body.name || '').trim();
+    const finalId = (idNumber || req.body.athleteId || '').trim().toUpperCase();
+    const finalExp = (experienceLevel || req.body.experience || '').trim();
+    const finalEmail = (email || '').trim().toLowerCase();
+    const finalMobile = (mobileNumber || req.body.mobile || '').trim();
+    const finalGender = (gender || '').trim();
+    const finalSport = (sport || '').trim();
+    const finalTeam = (teamClub || req.body.team || '').trim();
+    const finalDob = (dob || '').trim();
+    const finalInfo = (additionalInfo || '').trim();
+
     // 1. Validate mandatory fields
-    if (!athleteName || !idNumber || !email || !mobileNumber || !gender || !experienceLevel) {
+    if (!finalName || !finalId || !finalEmail || !finalMobile || !finalGender || !finalExp) {
         return res.status(400).json({ 
             error: "Full Name, Athlete ID, Email, Mobile Number, Gender, and Experience Level are required fields." 
         });
@@ -1131,17 +1181,17 @@ app.post('/events/:id/register', async (req, res) => {
 
     // 2. Format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
+    if (!emailRegex.test(finalEmail)) {
         return res.status(400).json({ error: "Please enter a valid email address (e.g. name@example.com)." });
     }
 
-    const cleanMobile = mobileNumber.replace(/[\s\-\(\)]/g, '');
+    const cleanMobile = finalMobile.replace(/[\s\-\(\)]/g, '');
     if (cleanMobile.length < 10) {
         return res.status(400).json({ error: "Mobile number must be at least 10 digits." });
     }
 
     // 3. Role enforcement: Officials are strictly prohibited from registering
-    if (role === 'Official' || idNumber.trim().toUpperCase().startsWith('OFF-')) {
+    if (role === 'Official' || finalId.startsWith('OFF-')) {
         return res.status(403).json({ error: "Officials are not permitted to register as competitors in events." });
     }
 
@@ -1151,7 +1201,7 @@ app.post('/events/:id/register', async (req, res) => {
             const { data: userRecord } = await supabase
                 .from('users')
                 .select('*')
-                .ilike('id_number', idNumber.trim())
+                .ilike('id_number', finalId)
                 .maybeSingle();
 
             if (userRecord) {
@@ -1187,7 +1237,7 @@ app.post('/events/:id/register', async (req, res) => {
                 .from('event_registrations')
                 .select('id')
                 .eq('event_id', eventId)
-                .ilike('id_number', idNumber.trim())
+                .ilike('id_number', finalId)
                 .maybeSingle();
 
             if (existingReg) {
@@ -1196,12 +1246,12 @@ app.post('/events/:id/register', async (req, res) => {
 
             const registrationDetails = {
                 mobileNumber: cleanMobile,
-                dob: (dob || '').trim(),
-                gender: gender.trim(),
-                sport: (sport || event.sport_type).trim(),
-                teamClub: (teamClub || '').trim(),
-                experienceLevel: experienceLevel.trim(),
-                additionalInfo: (additionalInfo || '').trim(),
+                dob: finalDob,
+                gender: finalGender,
+                sport: finalSport || event.sport_type,
+                teamClub: finalTeam,
+                experienceLevel: finalExp,
+                additionalInfo: finalInfo,
                 customAnswers: customAnswers || {},
                 status: 'Pending'
             };
@@ -1212,9 +1262,9 @@ app.post('/events/:id/register', async (req, res) => {
                 .insert({
                     event_id: eventId,
                     athlete_id: userRecord ? userRecord.id : null,
-                    athlete_name: athleteName.trim(),
-                    id_number: idNumber.trim().toUpperCase(),
-                    athlete_email: email.trim().toLowerCase(),
+                    athlete_name: finalName,
+                    id_number: finalId,
+                    athlete_email: finalEmail,
                     registration_details: registrationDetails
                 })
                 .select()
@@ -1234,12 +1284,12 @@ app.post('/events/:id/register', async (req, res) => {
                 idNumber: newReg.id_number,
                 email: newReg.athlete_email,
                 mobileNumber: cleanMobile,
-                dob: dob || 'N/A',
-                gender,
-                sport: sport || event.sport_type,
-                teamClub: teamClub || 'N/A',
-                experienceLevel,
-                additionalInfo: additionalInfo || '',
+                dob: finalDob || 'N/A',
+                gender: finalGender,
+                sport: finalSport || event.sport_type,
+                teamClub: finalTeam || 'N/A',
+                experienceLevel: finalExp,
+                additionalInfo: finalInfo,
                 date: newReg.registration_date,
                 status: 'Pending'
             };
@@ -1263,7 +1313,7 @@ app.post('/events/:id/register', async (req, res) => {
             }
 
             const alreadyReg = (event.registrations || []).some(
-                r => r.idNumber.toLowerCase() === idNumber.trim().toLowerCase()
+                r => r.idNumber.toLowerCase() === finalId.toLowerCase()
             );
             if (alreadyReg) {
                 return res.status(400).json({ error: "You are already registered for this sports event." });
@@ -1271,16 +1321,16 @@ app.post('/events/:id/register', async (req, res) => {
 
             const newRegistration = {
                 id: 'reg_' + Date.now(),
-                athleteName: athleteName.trim(),
-                idNumber: idNumber.trim().toUpperCase(),
-                email: email.trim().toLowerCase(),
+                athleteName: finalName,
+                idNumber: finalId,
+                email: finalEmail,
                 mobileNumber: cleanMobile,
-                dob: (dob || '').trim(),
-                gender: gender.trim(),
-                sport: (sport || event.sport).trim(),
-                teamClub: (teamClub || '').trim(),
-                experienceLevel: experienceLevel.trim(),
-                additionalInfo: (additionalInfo || '').trim(),
+                dob: finalDob,
+                gender: finalGender,
+                sport: finalSport || event.sport,
+                teamClub: finalTeam,
+                experienceLevel: finalExp,
+                additionalInfo: finalInfo,
                 customAnswers: customAnswers || {},
                 date: new Date().toISOString().split('T')[0],
                 status: 'Pending'
@@ -1714,9 +1764,12 @@ app.post('/official/claim-duty', async (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(PORT, HOST, () => {
     console.log(`====================================================`);
-    console.log(`SportsConnect Server running at http://localhost:${PORT}`);
+    console.log(`SportsConnect Server running on http://${HOST}:${PORT}`);
+    console.log(`Available on Localhost: http://localhost:${PORT}`);
+    console.log(`Available on LAN/Wi-Fi interfaces on port ${PORT}`);
     console.log(`Database Mode: ${isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local In-Memory Mode'}`);
     console.log(`Admin Gateway: http://localhost:${PORT}/admin.html`);
     console.log(`====================================================`);

@@ -37,6 +37,12 @@
 				animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 			}
 		</style>
+		<script>
+			// Guard: Admin Portal is strictly restricted to Web Browser only. Not available inside the mobile APK.
+			if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) {
+				window.location.replace('index.html');
+			}
+		</script>
 	</head>
 	<body class="bg-slate-100 font-sans text-gray-800 min-h-screen">
 		<!-- Toast Container -->

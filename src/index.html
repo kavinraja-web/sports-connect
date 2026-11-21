@@ -1832,20 +1832,7 @@
 						<p class="text-[10px] text-gray-400 mt-1">Make sure your phone and computer are connected to the same Wi-Fi router if using local IP.</p>
 					</div>
 
-					<!-- Administrator Gateway (Separated from User Flows) -->
-					<div class="p-4 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex items-center justify-between shadow-md">
-						<div>
-							<span class="text-xs font-black uppercase tracking-wider block text-yellow-400">
-								<i class="fas fa-user-shield mr-1"></i> Admin Control Center
-							</span>
-							<span class="text-[10px] text-blue-200 font-semibold">Verify & approve athletes and officials</span>
-						</div>
-						<a
-							href="admin.html"
-							class="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl transition shadow flex items-center gap-1.5">
-							Open Admin <i class="fas fa-arrow-right text-[10px]"></i>
-						</a>
-					</div>
+
 
 					<!-- Test Feedback Banner -->
 					<div id="serverTestFeedback" class="hidden p-3 rounded-xl text-xs font-bold"></div>
@@ -2107,6 +2094,163 @@
 					</button>
 				</div>
 
+			</div>
+		</div>
+
+		<!-- ================= IMMEDIATE MATCH ALERT FLOATING BANNER ================= -->
+		<div id="immediateMatchAlertBanner" class="hidden fixed top-4 left-3 right-3 sm:left-auto sm:right-4 z-[250] max-w-sm sm:max-w-md bg-blue-950 text-white rounded-3xl p-4 shadow-2xl border-2 border-yellow-500 animate-in slide-in-from-top duration-300">
+			<div class="flex items-start gap-3">
+				<div class="w-11 h-11 bg-yellow-500 text-blue-950 rounded-2xl flex items-center justify-center text-lg flex-shrink-0 shadow-lg animate-bounce">
+					<i class="fas fa-bell"></i>
+				</div>
+				<div class="flex-1 min-w-0">
+					<div class="flex items-center justify-between gap-1 mb-1">
+						<span id="immediateAlertBadge" class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+							<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping"></span> Live Match Alert
+						</span>
+						<button onclick="dismissImmediateAlertBanner()" class="text-white/60 hover:text-white p-1 text-sm leading-none">&times;</button>
+					</div>
+					<h4 id="immediateAlertTitle" class="text-sm font-black text-white uppercase italic tracking-tight line-clamp-1">Match Alert in Your Location</h4>
+					<p id="immediateAlertMsg" class="text-xs text-blue-100 font-semibold leading-relaxed mt-1 line-clamp-2">A match in your area has been scheduled or updated.</p>
+					<div class="flex items-center justify-between mt-3 pt-2 border-t border-blue-900/60">
+						<span id="immediateAlertLocation" class="text-[11px] font-bold text-yellow-400 truncate flex items-center gap-1">
+							<i class="fas fa-map-marker-alt"></i> Tamil Nadu
+						</span>
+						<button id="immediateAlertActionBtn" onclick="handleImmediateAlertClick()" class="bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 text-xs font-black uppercase px-3 py-1.5 rounded-xl shadow transition flex items-center gap-1">
+							<span>View Match</span> <i class="fas fa-arrow-right text-[10px]"></i>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ================= OFFICIAL EDIT / UPDATE MATCH MODAL ================= -->
+		<div id="editMatchModal" class="hidden fixed inset-0 z-[180] flex items-center justify-center bg-blue-950/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+			<div class="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 my-auto animate-in fade-in zoom-in duration-200 flex flex-col max-h-[92vh]">
+				
+				<!-- Header -->
+				<div class="bg-blue-950 text-white p-5 flex items-center justify-between border-b border-blue-900">
+					<div class="flex items-center gap-2.5">
+						<div class="w-9 h-9 bg-yellow-500 text-blue-950 rounded-xl flex items-center justify-center text-sm font-black shadow">
+							<i class="fas fa-edit"></i>
+						</div>
+						<div>
+							<h3 class="text-base font-black uppercase italic tracking-tight">Update Match Schedule</h3>
+							<p class="text-[10px] text-blue-200">Broadcast updates immediately to players in this location</p>
+						</div>
+					</div>
+					<button onclick="closeEditMatchModal()" class="w-8 h-8 rounded-full bg-blue-900 hover:bg-blue-800 text-white flex items-center justify-center text-xs transition">
+						<i class="fas fa-times"></i>
+					</button>
+				</div>
+
+				<!-- Form Content -->
+				<form id="editMatchForm" onsubmit="handleSaveMatchUpdate(event)" class="p-6 space-y-4 overflow-y-auto text-xs">
+					<input type="hidden" id="editMatchEventId" value="" />
+
+					<div>
+						<label class="block font-black uppercase text-blue-950 mb-1">Event / Tournament Title *</label>
+						<input type="text" id="editMatchName" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+					</div>
+
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Sport Discipline *</label>
+							<select id="editMatchSport" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="Cricket">Cricket</option>
+								<option value="Football">Football</option>
+								<option value="Volleyball">Volleyball</option>
+								<option value="Basketball">Basketball</option>
+								<option value="Badminton">Badminton</option>
+								<option value="Athletics">Athletics</option>
+								<option value="Hockey">Hockey</option>
+								<option value="Kabaddi">Kabaddi</option>
+								<option value="Tennis">Tennis</option>
+								<option value="Table Tennis">Table Tennis</option>
+							</select>
+						</div>
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Age Category *</label>
+							<select id="editMatchAgeCategory" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="Under 16">Under 16</option>
+								<option value="Under 18">Under 18</option>
+								<option value="Under 21">Under 21</option>
+								<option value="Open / Senior">Open / Senior</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Match Date *</label>
+							<input type="date" id="editMatchDate" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Reporting Time</label>
+							<input type="text" id="editMatchTime" placeholder="e.g. 09:00 AM" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+					</div>
+
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">State *</label>
+							<select id="editMatchState" onchange="handleEditMatchStateChange(this.value)" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">-- Select State --</option>
+							</select>
+						</div>
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">District *</label>
+							<select id="editMatchDistrict" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">-- Select District --</option>
+							</select>
+						</div>
+					</div>
+
+					<div>
+						<label class="block font-black uppercase text-blue-950 mb-1">Venue / Ground Location *</label>
+						<input type="text" id="editMatchLocation" required placeholder="e.g. Nehru Stadium, Court 2" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+					</div>
+
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Match Status *</label>
+							<select id="editMatchStatus" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="Schedule Updated">Schedule Updated</option>
+								<option value="Venue Changed">Venue Changed</option>
+								<option value="Rescheduled">Rescheduled</option>
+								<option value="Time Updated">Time Updated</option>
+								<option value="Reporting Time Changed">Reporting Time Changed</option>
+								<option value="Open">Open</option>
+								<option value="Postponed">Postponed</option>
+							</select>
+						</div>
+						<div>
+							<label class="block font-black uppercase text-blue-950 mb-1">Max Capacity</label>
+							<input type="number" id="editMatchCapacity" min="1" max="500" value="50" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+						</div>
+					</div>
+
+					<div>
+						<label class="block font-black uppercase text-blue-950 mb-1">Update Notes for Athletes & Players</label>
+						<textarea id="editMatchDescription" rows="2" placeholder="e.g. Match reporting moved to 8:30 AM due to morning heats. Bring ID card." class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition"></textarea>
+					</div>
+
+					<!-- Location Target Callout -->
+					<div class="p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl text-[11px] font-bold flex items-center gap-2">
+						<i class="fas fa-bullhorn text-yellow-600 text-sm"></i>
+						<span>Saving this will immediately broadcast a match update notification to all mobile players in this location.</span>
+					</div>
+
+					<!-- Submit Actions -->
+					<div class="pt-2 flex items-center justify-end gap-3">
+						<button type="button" onclick="closeEditMatchModal()" class="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs uppercase hover:bg-gray-100 transition">
+							Cancel
+						</button>
+						<button type="submit" id="btnSubmitMatchUpdate" class="px-6 py-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+							<i class="fas fa-paper-plane"></i> Broadcast Update to Players
+						</button>
+					</div>
+				</form>
 			</div>
 		</div>
 

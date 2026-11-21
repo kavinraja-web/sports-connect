@@ -33,5 +33,37 @@
     "device_platform": "android",
     "created_at": "2026-11-19T04:50:46.611Z",
     "updated_at": "2026-11-19T04:51:45.728Z"
+  },
+  {
+    "user_id_number": "ATH-MADURAI-1795276720662",
+    "user_email": "kavin@example.com",
+    "user_name": "Kavin Player",
+    "age_category": "Under 18",
+    "state": "Tamil Nadu",
+    "district": "Madurai",
+    "sports": [
+      "Cricket"
+    ],
+    "notifications_enabled": true,
+    "device_token": null,
+    "device_platform": "android",
+    "created_at": "2026-11-21T15:58:40.806Z",
+    "updated_at": "2026-11-21T15:58:40.806Z"
+  },
+  {
+    "user_id_number": "ATH-CBE-1795276724862",
+    "user_email": "cbe@example.com",
+    "user_name": "Coimbatore Player",
+    "age_category": "Under 18",
+    "state": "Tamil Nadu",
+    "district": "Coimbatore",
+    "sports": [
+      "Football"
+    ],
+    "notifications_enabled": true,
+    "device_token": null,
+    "device_platform": "android",
+    "created_at": "2026-11-21T15:58:44.866Z",
+    "updated_at": "2026-11-21T15:58:44.866Z"
   }
 ]

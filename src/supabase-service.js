@@ -520,6 +520,24 @@ const SupabaseService = {
         return prefs;
     },
 
+    // 16b. Update Event in Cloud
+    async updateEvent(eventId, fields) {
+        try {
+            const res = await fetch(`${this.URL}/rest/v1/sports_events?id=eq.${eventId}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify(fields)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return data && data[0] ? this.formatEvent(data[0]) : null;
+            }
+        } catch (e) {
+            console.warn('[SupabaseService] updateEvent error:', e);
+        }
+        return null;
+    },
+
     // 17. Get Player Preferences
     async getPlayerPreferences(userId) {
         try {

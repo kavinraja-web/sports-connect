@@ -1356,6 +1356,12 @@ async function loadOfficialHostedEvents() {
                                 <i class="fas fa-users-cog"></i> View Registrations (<span class="font-mono">${currentRegs}</span>)
                             </button>
 
+                            <button
+                                onclick="openEditMatchModal(${ev.id})"
+                                class="w-full bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black py-2.5 rounded-xl uppercase tracking-wider text-xs transition shadow-md flex items-center justify-center gap-2 border border-yellow-400">
+                                <i class="fas fa-edit"></i> Update Match Schedule & Notify Players
+                            </button>
+
                             <div class="flex items-center gap-2">
                                 <button
                                     onclick="openPublicEventDetails(${ev.id})"
@@ -2851,6 +2857,9 @@ function initPersonalizedNotifications() {
     // Load Notifications for Header Badge
     loadPlayerNotifications();
 
+    // Start background watcher that checks for any new match notifications in player's location every 6s
+    startRealtimeNotificationWatcher();
+
     // Check for First-Time App Opening on Mobile
     checkAndShowFirstTimeOnboarding();
 }
@@ -3391,7 +3400,123 @@ function closeNotificationCenterModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-async function loadPlayerNotifications() {
+let activeImmediateEventId = null;
+let immediateAlertTimer = null;
+let realtimeWatcherTimer = null;
+
+// Gentle audio chime when a match alert arrives in the player's location
+function playNotificationChime() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+    } catch (e) {}
+}
+
+// Deliver Immediate Notification To Mobile Device
+async function deliverImmediateNotificationToDevice(notif) {
+    if (!notif) return;
+    console.log('[IMMEDIATE MATCH NOTIFICATION DISPATCHED TO MOBILE]', notif);
+
+    // 1. Play audible chime & trigger phone vibration
+    playNotificationChime();
+    if (navigator.vibrate) {
+        try { navigator.vibrate([200, 100, 200]); } catch (e) {}
+    }
+
+    // 2. Schedule Native Android System Notification via Capacitor LocalNotifications
+    if (window.Capacitor && window.Capacitor.isPluginAvailable && window.Capacitor.isPluginAvailable('LocalNotifications')) {
+        try {
+            const notifId = Math.abs(Number(notif.id) || (Date.now() % 1000000));
+            await window.Capacitor.Plugins.LocalNotifications.schedule({
+                notifications: [{
+                    title: notif.title || '🏆 ProSports – Match Alert',
+                    body: notif.message,
+                    id: notifId,
+                    schedule: { at: new Date(Date.now() + 100) },
+                    sound: 'beep.wav',
+                    channelId: 'sportsconnect_matches',
+                    extra: { eventId: notif.event_id }
+                }]
+            });
+        } catch (e) {
+            console.warn('[LocalNotifications schedule notice]', e);
+        }
+    }
+
+    // 3. Pop Immediate In-App Floating Alert Banner on Screen
+    const banner = document.getElementById('immediateMatchAlertBanner');
+    const titleEl = document.getElementById('immediateAlertTitle');
+    const msgEl = document.getElementById('immediateAlertMsg');
+    const locEl = document.getElementById('immediateAlertLocation');
+    const badgeEl = document.getElementById('immediateAlertBadge');
+
+    activeImmediateEventId = notif.event_id || null;
+
+    if (banner && titleEl && msgEl) {
+        titleEl.textContent = notif.title || 'Match Alert in Your Location';
+        msgEl.textContent = notif.message || 'A match in your area has been updated.';
+        if (locEl) locEl.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${escapeHtml(notif.location || 'Your Location')}`;
+        if (badgeEl) {
+            if (notif.is_update || (notif.title && notif.title.includes('Updated'))) {
+                badgeEl.className = 'bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1';
+                badgeEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span> Match Updated';
+            } else {
+                badgeEl.className = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1';
+                badgeEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping"></span> New Match Alert';
+            }
+        }
+
+        banner.classList.remove('hidden');
+
+        if (immediateAlertTimer) clearTimeout(immediateAlertTimer);
+        immediateAlertTimer = setTimeout(() => {
+            banner.classList.add('hidden');
+        }, 10000);
+    }
+}
+
+function dismissImmediateAlertBanner() {
+    const banner = document.getElementById('immediateMatchAlertBanner');
+    if (banner) banner.classList.add('hidden');
+    if (immediateAlertTimer) clearTimeout(immediateAlertTimer);
+}
+
+function handleImmediateAlertClick() {
+    dismissImmediateAlertBanner();
+    if (activeImmediateEventId) {
+        openPublicEventDetails(activeImmediateEventId);
+    } else {
+        openNotificationCenterModal();
+    }
+}
+
+// Background Realtime Watcher
+function startRealtimeNotificationWatcher() {
+    if (realtimeWatcherTimer) clearInterval(realtimeWatcherTimer);
+    realtimeWatcherTimer = setInterval(() => {
+        loadPlayerNotifications(true);
+    }, 6000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            loadPlayerNotifications(true);
+        }
+    });
+}
+
+async function loadPlayerNotifications(silent = false) {
     const userId = getEffectivePlayerId();
     let notifications = [];
 
@@ -3410,6 +3535,32 @@ async function loadPlayerNotifications() {
                 const data = await res.json();
                 if (Array.isArray(data.notifications)) notifications = data.notifications;
             }
+        } catch (e) {}
+    }
+
+    // Check for newly arrived unread notifications and deliver immediately to phone
+    let deliveredIds = [];
+    try {
+        const raw = localStorage.getItem('prosports_delivered_notifs');
+        if (raw) deliveredIds = JSON.parse(raw);
+    } catch (e) {}
+    if (!Array.isArray(deliveredIds)) deliveredIds = [];
+
+    const unreadNotifs = notifications.filter(n => !n.is_read);
+    let hasNew = false;
+
+    unreadNotifs.forEach(notif => {
+        const idKey = String(notif.id || notif.event_id + '_' + notif.created_at);
+        if (!deliveredIds.includes(idKey)) {
+            deliveredIds.push(idKey);
+            hasNew = true;
+            deliverImmediateNotificationToDevice(notif);
+        }
+    });
+
+    if (hasNew) {
+        try {
+            localStorage.setItem('prosports_delivered_notifs', JSON.stringify(deliveredIds.slice(-100)));
         } catch (e) {}
     }
 
@@ -3899,6 +4050,145 @@ function formatTimeAgo(dateStr) {
     return date.toLocaleDateString();
 }
 
+// Match Update & Editing Functions
+let currentEditingEventId = null;
+
+function openEditMatchModal(eventId) {
+    const ev = cachedHostedEvents.find(e => Number(e.id) === Number(eventId)) ||
+               cachedPublicEvents.find(e => Number(e.id) === Number(eventId));
+    if (!ev) return;
+    currentEditingEventId = Number(eventId);
+
+    const modal = document.getElementById('editMatchModal');
+    if (!modal) return;
+
+    const idEl = document.getElementById('editMatchEventId');
+    const nameEl = document.getElementById('editMatchName');
+    const sportEl = document.getElementById('editMatchSport');
+    const ageEl = document.getElementById('editMatchAgeCategory');
+    const dateEl = document.getElementById('editMatchDate');
+    const timeEl = document.getElementById('editMatchTime');
+    const locEl = document.getElementById('editMatchLocation');
+    const statusEl = document.getElementById('editMatchStatus');
+    const capEl = document.getElementById('editMatchCapacity');
+    const descEl = document.getElementById('editMatchDescription');
+
+    if (idEl) idEl.value = ev.id;
+    if (nameEl) nameEl.value = ev.name || '';
+    if (sportEl) sportEl.value = ev.sport || 'Cricket';
+    if (ageEl) ageEl.value = ev.ageCategory || 'Under 18';
+    if (dateEl) dateEl.value = ev.date || '';
+    if (timeEl) timeEl.value = ev.time || '10:00 AM';
+    if (locEl) locEl.value = ev.location || '';
+    if (statusEl) statusEl.value = ev.status || 'Schedule Updated';
+    if (capEl) capEl.value = ev.maxCapacity || 50;
+    if (descEl) descEl.value = ev.description || '';
+
+    // Populate State dropdown
+    const stateEl = document.getElementById('editMatchState');
+    if (stateEl && typeof INDIA_STATES_AND_DISTRICTS === 'object') {
+        stateEl.innerHTML = '<option value="">-- Select State --</option>';
+        Object.keys(INDIA_STATES_AND_DISTRICTS).sort().forEach(st => {
+            const opt = document.createElement('option');
+            opt.value = st;
+            opt.textContent = st;
+            stateEl.appendChild(opt);
+        });
+
+        if (ev.state) {
+            stateEl.value = ev.state;
+            handleEditMatchStateChange(ev.state);
+            if (ev.district) {
+                const distEl = document.getElementById('editMatchDistrict');
+                if (distEl) distEl.value = ev.district;
+            }
+        }
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function handleEditMatchStateChange(stateVal) {
+    const distEl = document.getElementById('editMatchDistrict');
+    if (!distEl) return;
+    distEl.innerHTML = '<option value="">-- Select District --</option>';
+    if (!stateVal || typeof INDIA_STATES_AND_DISTRICTS !== 'object' || !INDIA_STATES_AND_DISTRICTS[stateVal]) return;
+    INDIA_STATES_AND_DISTRICTS[stateVal].forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        distEl.appendChild(opt);
+    });
+}
+
+function closeEditMatchModal() {
+    const modal = document.getElementById('editMatchModal');
+    if (modal) modal.classList.add('hidden');
+    currentEditingEventId = null;
+}
+
+async function handleSaveMatchUpdate(event) {
+    if (event) event.preventDefault();
+    const btn = document.getElementById('btnSubmitMatchUpdate');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i> Broadcasting Update...';
+    }
+
+    const eventId = Number(document.getElementById('editMatchEventId').value) || currentEditingEventId;
+    const name = document.getElementById('editMatchName').value.trim();
+    const sport = document.getElementById('editMatchSport').value.trim();
+    const ageCategory = document.getElementById('editMatchAgeCategory').value.trim();
+    const date = document.getElementById('editMatchDate').value.trim();
+    const time = document.getElementById('editMatchTime').value.trim() || '10:00 AM';
+    const state = document.getElementById('editMatchState').value.trim();
+    const district = document.getElementById('editMatchDistrict').value.trim();
+    const location = document.getElementById('editMatchLocation').value.trim();
+    const status = document.getElementById('editMatchStatus').value.trim();
+    const maxCapacity = Number(document.getElementById('editMatchCapacity').value) || 50;
+    const description = document.getElementById('editMatchDescription').value.trim();
+
+    const payload = {
+        name,
+        sport,
+        ageCategory,
+        date,
+        time,
+        state,
+        district,
+        location,
+        status,
+        maxCapacity,
+        description
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/events/${eventId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showInteractiveToast('Match Updated!', `Schedule updated. Live notification broadcasted immediately to players in ${district}, ${state}!`, 'success');
+            closeEditMatchModal();
+            loadOfficialHostedEvents();
+            loadPublicEvents();
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            showInteractiveToast('Update Failed', errData.error || 'Could not update match.', 'danger');
+        }
+    } catch (err) {
+        console.error('[Error updating match]', err);
+        showInteractiveToast('Connection Error', 'Could not reach server to update match.', 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Broadcast Update to Players';
+        }
+    }
+}
+
 // Explicit window bindings for hybrid WebView & inline HTML onclick handlers
 if (typeof window !== 'undefined') {
     window.returnToHome = returnToHome;
@@ -3977,4 +4267,14 @@ if (typeof window !== 'undefined') {
     window.handleUpdatePlayerPreferences = handleUpdatePlayerPreferences;
     window.populateEventStateAndDistricts = populateEventStateAndDistricts;
     window.handleEventStateSelect = handleEventStateSelect;
+
+    // Match Update and Immediate Alert Bindings
+    window.openEditMatchModal = openEditMatchModal;
+    window.handleEditMatchStateChange = handleEditMatchStateChange;
+    window.closeEditMatchModal = closeEditMatchModal;
+    window.handleSaveMatchUpdate = handleSaveMatchUpdate;
+    window.dismissImmediateAlertBanner = dismissImmediateAlertBanner;
+    window.handleImmediateAlertClick = handleImmediateAlertClick;
+    window.deliverImmediateNotificationToDevice = deliverImmediateNotificationToDevice;
+    window.startRealtimeNotificationWatcher = startRealtimeNotificationWatcher;
 }

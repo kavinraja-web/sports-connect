@@ -2,9 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { supabase, isSupabaseConfigured, testConnection } = require('./supabaseClient');
+const { INDIA_STATES_AND_DISTRICTS } = require('./src/india-data');
 
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || 'sportsconnect-jwt-secret-key-2026';
@@ -932,7 +934,7 @@ app.get('/events', async (req, res) => {
 
 // POST /events - Create a new event with custom registration fields
 app.post('/events', async (req, res) => {
-    const { name, sport, date, location, maxCapacity, customFields, officialId, officialName, officialEmail, description, eligibility, image } = req.body;
+    const { name, sport, date, location, maxCapacity, customFields, officialId, officialName, officialEmail, description, eligibility, image, ageCategory, state, district } = req.body;
 
     if (!name || !sport || !date || !location || !maxCapacity) {
         return res.status(400).json({ error: "All core event fields (Name, Sport, Date, Location, Max Capacity) are required." });
@@ -968,6 +970,14 @@ app.post('/events', async (req, res) => {
             }, []);
             console.log(`[EVENT CREATED (Supabase)] "${formatted.name}" by Official ${formatted.officialName} with ${formatted.customFields.length} custom fields.`);
 
+            // Trigger Automatic Targeted Player Matching for Notifications
+            await triggerAutomaticPlayerMatching({
+                ...formatted,
+                ageCategory,
+                state,
+                district
+            });
+
             return res.status(201).json({
                 success: true,
                 message: "Tournament event created successfully!",
@@ -998,6 +1008,14 @@ app.post('/events', async (req, res) => {
             localEvents.unshift(newEvent);
             console.log(`[EVENT CREATED (Local)] "${newEvent.name}" by Official ${newEvent.officialName} with ${newEvent.customFields.length} custom fields.`);
 
+            // Trigger Automatic Targeted Player Matching for Notifications
+            await triggerAutomaticPlayerMatching({
+                ...newEvent,
+                ageCategory,
+                state,
+                district
+            });
+
             return res.status(201).json({
                 success: true,
                 message: "Tournament event created successfully!",
@@ -1008,6 +1026,133 @@ app.post('/events', async (req, res) => {
         console.error('[Error] POST /events:', err.message);
         return res.status(500).json({ error: "Failed to create event." });
     }
+});
+
+// PUT /events/:id - Update an existing match or tournament (and immediately notify matching players)
+app.put('/events/:id', async (req, res) => {
+    const eventId = Number(req.params.id);
+    const {
+        name, sport, date, time, location, state, district,
+        ageCategory, status, description, prizes, maxCapacity, eligibility
+    } = req.body;
+
+    try {
+        let updatedEvent = null;
+
+        if (isSupabaseConfigured()) {
+            const updateFields = {};
+            if (name) updateFields.name = name.trim();
+            if (sport) updateFields.sport = sport.trim();
+            if (date) updateFields.date = date.trim();
+            if (time) updateFields.time = time.trim();
+            if (location) updateFields.location = location.trim();
+            if (state) updateFields.state = state.trim();
+            if (district) updateFields.district = district.trim();
+            if (ageCategory) updateFields.age_category = ageCategory.trim();
+            if (status) updateFields.status = status.trim();
+            if (description !== undefined) updateFields.description = description.trim();
+            if (prizes !== undefined) updateFields.prizes = prizes.trim();
+            if (maxCapacity) updateFields.max_capacity = Number(maxCapacity);
+            if (eligibility !== undefined) updateFields.eligibility = eligibility.trim();
+            updateFields.updated_at = new Date().toISOString();
+
+            try {
+                const { data } = await supabase
+                    .from('sports_events')
+                    .update(updateFields)
+                    .eq('id', eventId)
+                    .select()
+                    .single();
+
+                if (data) {
+                    updatedEvent = {
+                        id: data.id,
+                        name: data.name || name,
+                        sport: data.sport || sport,
+                        date: data.date || date,
+                        time: data.time || time || '10:00 AM',
+                        location: data.location || location,
+                        state: data.state || state,
+                        district: data.district || district,
+                        ageCategory: data.age_category || ageCategory,
+                        status: data.status || status || 'Updated',
+                        description: data.description || description,
+                        prizes: data.prizes || prizes
+                    };
+                }
+            } catch (e) {
+                console.warn('[Supabase update event warning]', e.message);
+            }
+        }
+
+        // Local fallback update
+        const localIndex = localEvents.findIndex(e => Number(e.id) === eventId);
+        if (localIndex >= 0) {
+            localEvents[localIndex] = {
+                ...localEvents[localIndex],
+                name: name ? name.trim() : localEvents[localIndex].name,
+                sport: sport ? sport.trim() : localEvents[localIndex].sport,
+                date: date ? date.trim() : localEvents[localIndex].date,
+                time: time ? time.trim() : (localEvents[localIndex].time || '10:00 AM'),
+                location: location ? location.trim() : localEvents[localIndex].location,
+                state: state ? state.trim() : localEvents[localIndex].state,
+                district: district ? district.trim() : localEvents[localIndex].district,
+                ageCategory: ageCategory ? ageCategory.trim() : localEvents[localIndex].ageCategory,
+                status: status ? status.trim() : 'Updated',
+                description: description !== undefined ? description : localEvents[localIndex].description,
+                prizes: prizes !== undefined ? prizes : localEvents[localIndex].prizes,
+                updatedAt: new Date().toISOString()
+            };
+            if (!updatedEvent) updatedEvent = localEvents[localIndex];
+        }
+
+        if (!updatedEvent) {
+            updatedEvent = {
+                id: eventId,
+                name: name || 'Match Event',
+                sport: sport || 'Cricket',
+                date: date || 'TBD',
+                time: time || '10:00 AM',
+                location: location || 'Stadium',
+                state,
+                district,
+                ageCategory,
+                status: status || 'Updated'
+            };
+        }
+
+        console.log(`[EVENT UPDATED] Event #${eventId} "${updatedEvent.name}" updated. Triggering immediate player notification dispatch for location: ${updatedEvent.district || ''}, ${updatedEvent.state || ''}`);
+
+        // Trigger Automatic Targeted Player Matching for Update (isUpdate = true)
+        await triggerAutomaticPlayerMatching({
+            ...updatedEvent,
+            ageCategory: ageCategory || updatedEvent.ageCategory,
+            state: state || updatedEvent.state,
+            district: district || updatedEvent.district,
+            time: time || updatedEvent.time,
+            status: status || updatedEvent.status
+        }, true /* isUpdate */);
+
+        return res.json({
+            success: true,
+            message: "Match event updated successfully and notifications immediately dispatched to matching players!",
+            event: updatedEvent
+        });
+    } catch (err) {
+        console.error('[Error] PUT /events/:id:', err.message);
+        return res.status(500).json({ error: "Failed to update match event: " + err.message });
+    }
+});
+
+// Route aliases for convenience
+app.patch('/events/:id', async (req, res) => {
+    req.method = 'PUT';
+    return app._router.handle(req, res);
+});
+
+app.post('/events/:id/update', async (req, res) => {
+    req.method = 'PUT';
+    return app._router.handle(req, res);
 });
 
 // GET /events/:id - Get complete event details (Publicly accessible)
@@ -1759,6 +1904,421 @@ app.post('/official/claim-duty', async (req, res) => {
     } catch (err) {
         console.error('[Error] POST /official/claim-duty:', err.message);
         return res.status(500).json({ error: "Failed to claim officiating duty." });
+    }
+});
+
+// ====================================================================
+// PERSONALIZED SPORTS NOTIFICATIONS & PLAYER PREFERENCES SUBSYSTEM
+// ====================================================================
+const PREFS_FILE = path.join(__dirname, 'data', 'player_preferences.json');
+const NOTIFS_FILE = path.join(__dirname, 'data', 'player_notifications.json');
+
+function readJsonFileSafe(filePath, defaultVal = []) {
+    try {
+        if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, JSON.stringify(defaultVal, null, 2));
+            return defaultVal;
+        }
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data || '[]');
+    } catch (e) {
+        console.warn(`[DATA] Failed reading ${filePath}:`, e.message);
+        return defaultVal;
+    }
+}
+
+function writeJsonFileSafe(filePath, data) {
+    try {
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    } catch (e) {
+        console.error(`[DATA] Failed writing ${filePath}:`, e.message);
+    }
+}
+
+// Fetch all player preferences (Supabase with local fallback)
+async function getAllPlayerPreferences() {
+    let prefs = [];
+    if (isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase.from('player_preferences').select('*');
+            if (!error && Array.isArray(data)) {
+                prefs = data;
+            }
+        } catch (e) {}
+    }
+    const local = readJsonFileSafe(PREFS_FILE, []);
+    const map = new Map();
+    local.forEach(p => map.set((p.user_id_number || '').toUpperCase(), p));
+    prefs.forEach(p => map.set((p.user_id_number || '').toUpperCase(), p));
+    return Array.from(map.values());
+}
+
+// Save player preferences (Supabase with local fallback)
+async function savePlayerPreference(record) {
+    // 1. Local persistent write
+    const local = readJsonFileSafe(PREFS_FILE, []);
+    const idx = local.findIndex(p => (p.user_id_number || '').toUpperCase() === (record.user_id_number || '').toUpperCase());
+    if (idx >= 0) {
+        local[idx] = { ...local[idx], ...record, updated_at: new Date().toISOString() };
+    } else {
+        local.push({ ...record, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    }
+    writeJsonFileSafe(PREFS_FILE, local);
+
+    // 2. Supabase upsert
+    if (isSupabaseConfigured()) {
+        try {
+            const { error } = await supabase
+                .from('player_preferences')
+                .upsert(record, { onConflict: 'user_id_number' });
+            if (error) console.warn('[SUPABASE PREFS] Upsert notice:', error.message);
+        } catch (e) {
+            console.warn('[SUPABASE PREFS] Not available yet in cloud:', e.message);
+        }
+    }
+    return record;
+}
+
+// Fetch player notifications (Supabase with local fallback)
+async function getPlayerNotifications(userId) {
+    const cleanId = (userId || '').trim().toUpperCase();
+    if (isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase
+                .from('player_notifications')
+                .select('*')
+                .ilike('user_id_number', cleanId)
+                .order('created_at', { ascending: false });
+            if (!error && Array.isArray(data)) return data;
+        } catch (e) {}
+    }
+    const local = readJsonFileSafe(NOTIFS_FILE, []);
+    return local
+        .filter(n => (n.user_id_number || '').toUpperCase() === cleanId)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+// Save player notification
+async function savePlayerNotification(notif) {
+    // Local write
+    const local = readJsonFileSafe(NOTIFS_FILE, []);
+    const notifWithId = {
+        id: notif.id || Date.now() + Math.floor(Math.random() * 1000),
+        ...notif
+    };
+    local.unshift(notifWithId);
+    writeJsonFileSafe(NOTIFS_FILE, local);
+
+    // Supabase write
+    if (isSupabaseConfigured()) {
+        try {
+            await supabase.from('player_notifications').insert(notif);
+        } catch (e) {}
+    }
+    return notifWithId;
+}
+
+// Check if notification already sent for user + event
+async function hasNotificationBeenSent(userId, eventId) {
+    const cleanId = (userId || '').trim().toUpperCase();
+    const evId = Number(eventId);
+    const local = readJsonFileSafe(NOTIFS_FILE, []);
+    const exists = local.some(n => (n.user_id_number || '').toUpperCase() === cleanId && Number(n.event_id) === evId);
+    if (exists) return true;
+
+    if (isSupabaseConfigured()) {
+        try {
+            const { data } = await supabase
+                .from('player_notifications')
+                .select('id')
+                .ilike('user_id_number', cleanId)
+                .eq('event_id', evId)
+                .limit(1);
+            if (data && data.length > 0) return true;
+        } catch (e) {}
+    }
+    return false;
+}
+
+// Automatic Player Matching Engine
+async function triggerAutomaticPlayerMatching(event, isUpdate = false) {
+    try {
+        const eventId = event.id;
+        const eventName = event.name || event.event_name || 'Tournament';
+        const eventSport = (event.sport || event.sport_type || '').trim();
+        const eventDate = event.date || event.event_date || '';
+        const eventTime = event.time || '10:00 AM';
+        const eventLocation = (event.location || '').trim();
+        const eventStatus = event.status || 'Updated';
+
+        // 1. Detect Age Category
+        let eventAgeCategory = (event.ageCategory || '').trim();
+        if (!eventAgeCategory) {
+            const combined = `${eventName} ${event.eligibility || ''} ${event.description || ''}`.toLowerCase();
+            if (combined.includes('under 16') || combined.includes('under-16') || combined.includes('u16') || combined.includes('u-16')) {
+                eventAgeCategory = 'Under 16';
+            } else if (combined.includes('under 18') || combined.includes('under-18') || combined.includes('u18') || combined.includes('u-18')) {
+                eventAgeCategory = 'Under 18';
+            } else if (combined.includes('under 21') || combined.includes('under-21') || combined.includes('u21') || combined.includes('u-21')) {
+                eventAgeCategory = 'Under 21';
+            } else {
+                eventAgeCategory = 'Open / Senior';
+            }
+        }
+
+        // 2. Detect State and District
+        let eventState = (event.state || '').trim();
+        let eventDistrict = (event.district || '').trim();
+        if (!eventState || !eventDistrict) {
+            const searchStr = `${eventLocation} ${eventName}`.toLowerCase();
+            if (typeof INDIA_STATES_AND_DISTRICTS === 'object') {
+                for (const [st, dists] of Object.entries(INDIA_STATES_AND_DISTRICTS)) {
+                    if (searchStr.includes(st.toLowerCase())) {
+                        if (!eventState) eventState = st;
+                    }
+                    for (const dist of dists) {
+                        if (searchStr.includes(dist.toLowerCase())) {
+                            if (!eventDistrict) eventDistrict = dist;
+                            if (!eventState) eventState = st;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log(`[NOTIFICATIONS] Evaluating event "${eventName}" (${isUpdate ? 'MATCH UPDATE' : 'NEW MATCH'}) | Sport: ${eventSport} | Age: ${eventAgeCategory} | State: ${eventState || 'N/A'} | District: ${eventDistrict || 'N/A'}`);
+
+        // 3. Fetch players and match
+        const players = await getAllPlayerPreferences();
+        let matchCount = 0;
+
+        for (const player of players) {
+            // Condition 5: Notifications enabled
+            if (player.notifications_enabled === false) continue;
+
+            // Condition 1: Age category matches
+            if (player.age_category && eventAgeCategory &&
+                player.age_category.toLowerCase() !== eventAgeCategory.toLowerCase()) {
+                continue;
+            }
+
+            // Condition 2: State matches
+            if (eventState && player.state &&
+                player.state.toLowerCase() !== eventState.toLowerCase()) {
+                continue;
+            }
+
+            // Condition 3: District matches
+            if (eventDistrict && player.district &&
+                player.district.toLowerCase() !== eventDistrict.toLowerCase()) {
+                continue;
+            }
+
+            // Condition 4: Sport is among player's selected sports (max 5)
+            const pSports = Array.isArray(player.sports) ? player.sports : [];
+            const sportMatches = pSports.some(s => s.toLowerCase() === eventSport.toLowerCase());
+            if (!sportMatches) continue;
+
+            // Prevent duplicate creation notifications (for match updates, always deliver)
+            if (!isUpdate) {
+                const alreadySent = await hasNotificationBeenSent(player.user_id_number, eventId);
+                if (alreadySent) continue;
+            }
+
+            // Generate ProSports Branded Notification
+            const locLabel = eventDistrict && eventState ? `${eventDistrict}, ${eventState}` : eventLocation;
+            const notifTitle = isUpdate ? "🏆 ProSports – Match Updated!" : "🏆 ProSports – Match Alert";
+            const notifMsg = isUpdate
+                ? `Match Updated in your location: ${eventName} (${eventSport})!\n📍 Venue: ${locLabel}\n📅 Date: ${eventDate} • ${eventTime}\nStatus: ${eventStatus}\nMatches your location and sports preferences.`
+                : `New ${eventSport} Tournament for ${eventAgeCategory} players!\n📍 ${locLabel}\n📅 Event date: ${eventDate}\nMatches your sports and location preferences.`;
+
+            await savePlayerNotification({
+                user_id_number: player.user_id_number,
+                event_id: eventId,
+                title: notifTitle,
+                message: notifMsg,
+                sport: eventSport,
+                location: locLabel,
+                event_date: eventDate,
+                is_read: false,
+                is_update: isUpdate,
+                created_at: new Date().toISOString()
+            });
+
+            matchCount++;
+            console.log(`[MATCH ${isUpdate ? 'UPDATE' : 'ALERT'} SENT] -> Player ${player.user_id_number} (${player.user_name || 'Athlete'}) for Event "${eventName}" in ${locLabel}`);
+        }
+
+        console.log(`[NOTIFICATIONS COMPLETED] Matched and notified ${matchCount} targeted players.`);
+    } catch (err) {
+        console.error('[NOTIFICATIONS ERROR]', err);
+    }
+}
+
+// POST /api/player/preferences - Save or update player preferences
+app.post('/api/player/preferences', async (req, res) => {
+    try {
+        const { userId, email, name, ageCategory, state, district, sports, notificationsEnabled, deviceToken, platform } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ error: "User ID is required." });
+        }
+        if (!ageCategory || !state || !district) {
+            return res.status(400).json({ error: "Age category, State, and District are required." });
+        }
+        if (!Array.isArray(sports) || sports.length === 0) {
+            return res.status(400).json({ error: "Please select at least 1 sport." });
+        }
+        if (sports.length > 5) {
+            return res.status(400).json({ error: "You can select a maximum of 5 sports." });
+        }
+
+        const record = {
+            user_id_number: userId.trim(),
+            user_email: (email || '').trim(),
+            user_name: (name || '').trim(),
+            age_category: ageCategory.trim(),
+            state: state.trim(),
+            district: district.trim(),
+            sports,
+            notifications_enabled: notificationsEnabled !== false,
+            device_token: deviceToken || null,
+            device_platform: platform || 'android'
+        };
+
+        const saved = await savePlayerPreference(record);
+        console.log(`[PREFERENCES SAVED] For User: ${record.user_id_number} (${record.age_category}, ${record.district}, ${record.state}) - ${sports.length} sports`);
+
+        return res.json({
+            success: true,
+            message: "Player preferences saved successfully!",
+            preferences: saved
+        });
+    } catch (err) {
+        console.error('[Error] POST /api/player/preferences:', err);
+        return res.status(500).json({ error: "Failed to save preferences." });
+    }
+});
+
+// GET /api/player/preferences - Get saved preferences for user
+app.get('/api/player/preferences', async (req, res) => {
+    try {
+        const userId = req.query.userId;
+        if (!userId) return res.status(400).json({ error: "userId query param required." });
+
+        const all = await getAllPlayerPreferences();
+        const found = all.find(p => (p.user_id_number || '').toUpperCase() === userId.trim().toUpperCase());
+
+        return res.json({
+            success: true,
+            preferences: found || null
+        });
+    } catch (err) {
+        return res.status(500).json({ error: "Failed to fetch preferences." });
+    }
+});
+
+// POST /api/player/device-token - Register or refresh device push token
+app.post('/api/player/device-token', async (req, res) => {
+    try {
+        const { userId, token, platform } = req.body;
+        if (!userId || !token) {
+            return res.status(400).json({ error: "userId and token are required." });
+        }
+        const all = await getAllPlayerPreferences();
+        const existing = all.find(p => (p.user_id_number || '').toUpperCase() === userId.trim().toUpperCase());
+        if (existing) {
+            existing.device_token = token;
+            existing.device_platform = platform || existing.device_platform || 'android';
+            await savePlayerPreference(existing);
+        }
+        return res.json({ success: true, message: "Token registered successfully." });
+    } catch (err) {
+        return res.status(500).json({ error: "Failed to register token." });
+    }
+});
+
+// GET /api/player/notifications - Get notification history
+app.get('/api/player/notifications', async (req, res) => {
+    try {
+        const userId = req.query.userId;
+        if (!userId) return res.status(400).json({ error: "userId query param required." });
+
+        const notifs = await getPlayerNotifications(userId);
+        return res.json({
+            success: true,
+            notifications: notifs,
+            unreadCount: notifs.filter(n => !n.is_read).length
+        });
+    } catch (err) {
+        return res.status(500).json({ error: "Failed to fetch notifications." });
+    }
+});
+
+// PATCH /api/player/notifications/read - Mark notifications as read
+app.patch('/api/player/notifications/read', async (req, res) => {
+    try {
+        const { userId, notificationId, markAll } = req.body;
+        if (!userId) return res.status(400).json({ error: "userId required." });
+
+        const cleanId = userId.trim().toUpperCase();
+        const local = readJsonFileSafe(NOTIFS_FILE, []);
+        let updatedCount = 0;
+
+        local.forEach(n => {
+            if ((n.user_id_number || '').toUpperCase() === cleanId) {
+                if (markAll || Number(n.id) === Number(notificationId)) {
+                    n.is_read = true;
+                    updatedCount++;
+                }
+            }
+        });
+        writeJsonFileSafe(NOTIFS_FILE, local);
+
+        if (isSupabaseConfigured()) {
+            try {
+                let q = supabase.from('player_notifications').update({ is_read: true }).ilike('user_id_number', cleanId);
+                if (!markAll && notificationId) q = q.eq('id', notificationId);
+                await q;
+            } catch (e) {}
+        }
+
+        return res.json({ success: true, message: `Marked ${updatedCount} notification(s) as read.` });
+    } catch (err) {
+        return res.status(500).json({ error: "Failed to update notification state." });
+    }
+});
+
+// DELETE /api/player/notifications - Clear notifications
+app.delete('/api/player/notifications', async (req, res) => {
+    try {
+        const { userId, notificationId, clearAll } = req.body;
+        if (!userId) return res.status(400).json({ error: "userId required." });
+
+        const cleanId = userId.trim().toUpperCase();
+        let local = readJsonFileSafe(NOTIFS_FILE, []);
+
+        if (clearAll) {
+            local = local.filter(n => (n.user_id_number || '').toUpperCase() !== cleanId);
+        } else if (notificationId) {
+            local = local.filter(n => !( (n.user_id_number || '').toUpperCase() === cleanId && Number(n.id) === Number(notificationId) ));
+        }
+        writeJsonFileSafe(NOTIFS_FILE, local);
+
+        if (isSupabaseConfigured()) {
+            try {
+                let q = supabase.from('player_notifications').delete().ilike('user_id_number', cleanId);
+                if (!clearAll && notificationId) q = q.eq('id', notificationId);
+                await q;
+            } catch (e) {}
+        }
+
+        return res.json({ success: true, message: "Notifications cleared." });
+    } catch (err) {
+        return res.status(500).json({ error: "Failed to clear notifications." });
     }
 });
 

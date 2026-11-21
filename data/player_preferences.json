@@ -1,0 +1,37 @@
+[
+  {
+    "user_id_number": "ATH-MADURAI-18",
+    "user_email": "madurai.cricketer@test.com",
+    "user_name": "Kavin Raja",
+    "age_category": "Under 18",
+    "state": "Tamil Nadu",
+    "district": "Madurai",
+    "sports": [
+      "Cricket",
+      "Football",
+      "Volleyball"
+    ],
+    "notifications_enabled": true,
+    "device_token": null,
+    "device_platform": "android",
+    "created_at": "2026-11-19T04:50:45.062Z",
+    "updated_at": "2026-11-19T04:51:44.655Z"
+  },
+  {
+    "user_id_number": "ATH-CHENNAI-18",
+    "user_email": "chennai.player@test.com",
+    "user_name": "Chennai Athlete",
+    "age_category": "Under 18",
+    "state": "Tamil Nadu",
+    "district": "Chennai",
+    "sports": [
+      "Football",
+      "Badminton"
+    ],
+    "notifications_enabled": true,
+    "device_token": null,
+    "device_platform": "android",
+    "created_at": "2026-11-19T04:50:46.611Z",
+    "updated_at": "2026-11-19T04:51:45.728Z"
+  }
+]

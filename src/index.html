@@ -243,18 +243,28 @@
 				</div>
 
 				<!-- Mobile Header Right Actions (md:hidden) -->
-				<div class="flex md:hidden items-center gap-2.5">
+				<div class="flex md:hidden items-center gap-2">
+					<!-- Notifications Bell Button -->
+					<button
+						onclick="openNotificationCenterModal()"
+						title="Notifications"
+						class="relative p-2 text-blue-900 hover:text-yellow-600 transition flex items-center justify-center"
+						aria-label="View match notifications">
+						<i class="fas fa-bell text-lg"></i>
+						<span id="mobileNotificationBadge" class="hidden absolute top-0 right-0 min-w-[17px] h-[17px] px-1 bg-red-600 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white shadow-sm animate-pulse">0</span>
+					</button>
+
 					<div id="mobileLoggedOutBtns" class="flex items-center">
 						<button
 							onclick="openDirectLogin('Athlete')"
-							class="bg-blue-900 hover:bg-blue-800 text-white px-3.5 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-sm">
+							class="bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-sm">
 							Login
 						</button>
 					</div>
 					<div id="mobileLoggedInProfile" class="hidden">
 						<button
 							onclick="openCurrentDashboard()"
-							class="w-9 h-9 bg-blue-900 border-2 border-yellow-500 rounded-full flex items-center justify-center text-white font-black text-xs shadow">
+							class="w-8 h-8 bg-blue-900 border-2 border-yellow-500 rounded-full flex items-center justify-center text-white font-black text-xs shadow">
 							<span id="mobileUserInitial">?</span>
 						</button>
 					</div>
@@ -272,6 +282,13 @@
 		<div id="mobileMenu" class="hidden md:hidden bg-blue-950 text-white px-6 py-4 border-b-2 border-yellow-500 shadow-2xl space-y-3">
 			<button onclick="returnToHome(); toggleMobileMenu();" class="flex items-center gap-2 w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
 				<i class="fas fa-home text-yellow-500 w-5"></i> Home
+			</button>
+			<button onclick="openNotificationCenterModal(); toggleMobileMenu();" class="flex items-center justify-between w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
+				<span class="flex items-center gap-2"><i class="fas fa-bell text-yellow-500 w-5"></i> Notifications</span>
+				<span id="mobileMenuNotifBadge" class="hidden bg-yellow-500 text-blue-950 px-2 py-0.5 rounded-full text-[10px] font-black">0</span>
+			</button>
+			<button onclick="openManagePreferencesModal(); toggleMobileMenu();" class="flex items-center gap-2 w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
+				<i class="fas fa-sliders-h text-yellow-500 w-5"></i> Match Preferences
 			</button>
 			<button onclick="scrollToPublicEvents(); toggleMobileMenu();" class="flex items-center gap-2 w-full text-left font-bold hover:text-yellow-400 py-1 text-sm">
 				<i class="fas fa-trophy text-yellow-500 w-5"></i> Sports & Tournaments
@@ -377,28 +394,37 @@
 						ELITE PERFORMANCE. PROFESSIONAL STANDARDS.
 					</p>
 
-					<!-- Navigation Buttons Container: Two compact, centered buttons of equal width & height -->
+					<!-- Navigation Buttons Container: Two compact, centered buttons of equal width & height (SPORTS and OFFICIALS) -->
 					<div class="flex flex-col items-center gap-3.5 w-full">
-						<!-- MARATHON Button -->
-						<button
-							onclick="openMarathonDashboard(); event.preventDefault();"
-							class="w-64 h-12 bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all transform flex items-center justify-between px-5 border border-yellow-400/50">
-							<span class="flex items-center gap-3">
-								<i class="fas fa-running text-base text-blue-950"></i>
-								<span>MARATHON</span>
-							</span>
-							<i class="fas fa-arrow-right text-xs text-blue-950"></i>
-						</button>
-
 						<!-- SPORTS Button -->
 						<button
-							onclick="handleHeroSportsClick(event)"
-							class="w-64 h-12 bg-white hover:bg-gray-100 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all transform flex items-center justify-between px-5 border border-gray-100">
+							onclick="scrollToPublicEvents(); event.preventDefault();"
+							class="w-64 h-12 bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all transform flex items-center justify-between px-5 border border-yellow-400/50">
 							<span class="flex items-center gap-3">
 								<i class="fas fa-basketball text-base text-blue-950"></i>
 								<span>SPORTS</span>
 							</span>
+							<i class="fas fa-arrow-down text-xs text-blue-950"></i>
+						</button>
+
+						<!-- OFFICIALS Button -->
+						<button
+							onclick="handleHeroOfficialsClick(event)"
+							class="w-64 h-12 bg-white hover:bg-gray-100 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all transform flex items-center justify-between px-5 border border-gray-100">
+							<span class="flex items-center gap-3">
+								<i class="fas fa-clipboard-check text-base text-blue-950"></i>
+								<span>OFFICIALS</span>
+							</span>
 							<i class="fas fa-arrow-right text-xs text-blue-950"></i>
+						</button>
+
+						<!-- Marathon Portal Quick Link -->
+						<button
+							onclick="openMarathonDashboard(); event.preventDefault();"
+							class="text-xs text-yellow-400 font-bold hover:underline flex items-center gap-1.5 pt-1 transition">
+							<i class="fas fa-running"></i>
+							<span>Looking for Marathon? Click here</span>
+							<i class="fas fa-arrow-right text-[10px]"></i>
 						</button>
 					</div>
 				</div>
@@ -406,17 +432,17 @@
 		</header>
 
 		<!-- ================= PUBLIC SPORTS EVENTS SECTION (NO LOGIN REQUIRED) ================= -->
-		<section id="publicEventsSection" class="hidden md:block py-16 px-4 md:px-8 bg-slate-50 border-b border-gray-200">
+		<section id="publicEventsSection" class="py-12 md:py-16 px-4 md:px-8 bg-slate-50 border-b border-gray-200">
 			<div class="container mx-auto max-w-7xl">
-				<!-- Mobile Back to Home Navigation Bar (md:hidden) -->
+				<!-- Mobile Back to Top Navigation Bar (md:hidden) -->
 				<div class="md:hidden mb-6 flex items-center justify-between">
 					<button
-						onclick="returnToHome()"
-						class="inline-flex items-center gap-2 bg-white text-blue-950 border border-gray-200 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm hover:bg-gray-50 active:scale-95 transition">
-						<i class="fas fa-arrow-left text-yellow-500"></i> Back to Home
+						onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+						class="inline-flex items-center gap-2 bg-white text-blue-950 border border-gray-200 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm hover:bg-gray-50 active:scale-95 transition">
+						<i class="fas fa-arrow-up text-yellow-500"></i> Back to Top
 					</button>
-					<span class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-						Events Calendar
+					<span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+						<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Events Calendar
 					</span>
 				</div>
 
@@ -814,6 +840,44 @@
 										required
 										placeholder="e.g. City Sports Complex"
 										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition" />
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Target Age Category *
+									</label>
+									<select
+										id="evAgeCategory"
+										required
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition">
+										<option value="Under 16">Under 16 (Ages 12-15)</option>
+										<option value="Under 18" selected>Under 18 (Ages 16-17)</option>
+										<option value="Under 21">Under 21 (Ages 18-20)</option>
+										<option value="Open / Senior">Open / Senior (Ages 21+)</option>
+									</select>
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Tournament State *
+									</label>
+									<select
+										id="evState"
+										onchange="handleEventStateSelect(this.value)"
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition">
+										<option value="">-- Select State --</option>
+									</select>
+								</div>
+
+								<div>
+									<label class="block text-xs font-black uppercase text-gray-600 mb-1.5">
+										Tournament District *
+									</label>
+									<select
+										id="evDistrict"
+										class="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-900 transition">
+										<option value="">-- Select District --</option>
+									</select>
 								</div>
 
 								<div>
@@ -1768,6 +1832,21 @@
 						<p class="text-[10px] text-gray-400 mt-1">Make sure your phone and computer are connected to the same Wi-Fi router if using local IP.</p>
 					</div>
 
+					<!-- Administrator Gateway (Separated from User Flows) -->
+					<div class="p-4 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex items-center justify-between shadow-md">
+						<div>
+							<span class="text-xs font-black uppercase tracking-wider block text-yellow-400">
+								<i class="fas fa-user-shield mr-1"></i> Admin Control Center
+							</span>
+							<span class="text-[10px] text-blue-200 font-semibold">Verify & approve athletes and officials</span>
+						</div>
+						<a
+							href="admin.html"
+							class="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-blue-950 font-black text-xs uppercase tracking-wider rounded-xl transition shadow flex items-center gap-1.5">
+							Open Admin <i class="fas fa-arrow-right text-[10px]"></i>
+						</a>
+					</div>
+
 					<!-- Test Feedback Banner -->
 					<div id="serverTestFeedback" class="hidden p-3 rounded-xl text-xs font-bold"></div>
 				</div>
@@ -1784,7 +1863,440 @@
 			</div>
 		</div>
 
+		<!-- ================= FIRST-TIME PLAYER ONBOARDING & PREFERENCES WIZARD (STEP-BY-STEP) ================= -->
+		<div id="playerOnboardingModal" class="hidden fixed inset-0 z-[180] flex items-center justify-center bg-blue-950/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+			<div class="bg-white rounded-3xl max-w-md w-full shadow-2xl relative overflow-hidden border border-gray-200 flex flex-col my-auto animate-in fade-in zoom-in duration-200">
+				
+				<!-- Wizard Header (For Steps 1 to 4) -->
+				<div id="onboardingWizardHeader" class="bg-white border-b border-gray-100 p-4 pb-3">
+					<div class="flex items-center justify-between mb-3">
+						<!-- Back Button -->
+						<button type="button" id="onboardingBackBtn" onclick="handleOnboardingBack()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-blue-950 flex items-center justify-center text-xs font-black transition disabled:opacity-0 disabled:pointer-events-none" title="Go Back">
+							<i class="fas fa-arrow-left"></i>
+						</button>
+						
+						<!-- Step Progress Badge -->
+						<div class="flex items-center gap-1.5 bg-blue-950/5 px-3 py-1 rounded-full border border-blue-950/10">
+							<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+							<span id="onboardingStepBadge" class="text-[11px] font-black uppercase tracking-wider text-blue-950">Step 1 of 4</span>
+						</div>
+
+						<!-- Trophy Icon Badge -->
+						<div class="w-8 h-8 rounded-full bg-yellow-500/20 text-yellow-600 flex items-center justify-center text-xs font-black">
+							<i class="fas fa-trophy"></i>
+						</div>
+					</div>
+
+					<!-- Visual 4-Step Progress Bar -->
+					<div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+						<div id="onboardingProgressBar" class="bg-yellow-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 25%;"></div>
+					</div>
+				</div>
+
+				<!-- Step Views Body -->
+				<div class="p-5 sm:p-6 flex-1 flex flex-col justify-between">
+					
+					<!-- STEP 1: AGE CATEGORY -->
+					<div id="onboardStepView1" class="onboard-step-view space-y-4">
+						<div>
+							<div class="w-10 h-10 rounded-2xl bg-yellow-500/15 text-yellow-600 flex items-center justify-center text-lg font-black mb-3 border border-yellow-500/20">
+								<i class="fas fa-id-badge"></i>
+							</div>
+							<h2 class="text-xl sm:text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+								What's your age category?
+							</h2>
+							<p class="text-xs text-gray-500 mt-1 leading-relaxed">
+								Select the tournament division you compete or participate in:
+							</p>
+						</div>
+
+						<!-- Age Cards -->
+						<div class="space-y-2.5 pt-1" id="onboardAgeOptions">
+							<button type="button" onclick="selectOnboardingAge('Under 16')" data-age="Under 16" class="onboard-age-card w-full border-2 border-gray-200 hover:border-yellow-500 bg-white rounded-2xl p-3.5 text-left transition flex items-center justify-between group">
+								<div class="flex items-center gap-3">
+									<div class="card-icon-box w-9 h-9 rounded-xl bg-blue-50 text-blue-950 group-hover:bg-yellow-500 group-hover:text-blue-950 flex items-center justify-center text-xs font-black transition">
+										U16
+									</div>
+									<div>
+										<div class="text-sm font-black text-blue-950">Under 16</div>
+										<div class="text-[11px] text-gray-500">Ages 12 – 15</div>
+									</div>
+								</div>
+								<div class="check-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs text-transparent">
+									<i class="fas fa-check text-[10px]"></i>
+								</div>
+							</button>
+
+							<button type="button" onclick="selectOnboardingAge('Under 18')" data-age="Under 18" class="onboard-age-card w-full border-2 border-gray-200 hover:border-yellow-500 bg-white rounded-2xl p-3.5 text-left transition flex items-center justify-between group">
+								<div class="flex items-center gap-3">
+									<div class="card-icon-box w-9 h-9 rounded-xl bg-blue-50 text-blue-950 group-hover:bg-yellow-500 group-hover:text-blue-950 flex items-center justify-center text-xs font-black transition">
+										U18
+									</div>
+									<div>
+										<div class="text-sm font-black text-blue-950">Under 18</div>
+										<div class="text-[11px] text-gray-500">Ages 16 – 17</div>
+									</div>
+								</div>
+								<div class="check-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs text-transparent">
+									<i class="fas fa-check text-[10px]"></i>
+								</div>
+							</button>
+
+							<button type="button" onclick="selectOnboardingAge('Under 21')" data-age="Under 21" class="onboard-age-card w-full border-2 border-gray-200 hover:border-yellow-500 bg-white rounded-2xl p-3.5 text-left transition flex items-center justify-between group">
+								<div class="flex items-center gap-3">
+									<div class="card-icon-box w-9 h-9 rounded-xl bg-blue-50 text-blue-950 group-hover:bg-yellow-500 group-hover:text-blue-950 flex items-center justify-center text-xs font-black transition">
+										U21
+									</div>
+									<div>
+										<div class="text-sm font-black text-blue-950">Under 21</div>
+										<div class="text-[11px] text-gray-500">Ages 18 – 20</div>
+									</div>
+								</div>
+								<div class="check-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs text-transparent">
+									<i class="fas fa-check text-[10px]"></i>
+								</div>
+							</button>
+
+							<button type="button" onclick="selectOnboardingAge('Open / Senior')" data-age="Open / Senior" class="onboard-age-card w-full border-2 border-gray-200 hover:border-yellow-500 bg-white rounded-2xl p-3.5 text-left transition flex items-center justify-between group">
+								<div class="flex items-center gap-3">
+									<div class="card-icon-box w-9 h-9 rounded-xl bg-blue-50 text-blue-950 group-hover:bg-yellow-500 group-hover:text-blue-950 flex items-center justify-center text-xs font-black transition">
+										OP
+									</div>
+									<div>
+										<div class="text-sm font-black text-blue-950">Open / Senior</div>
+										<div class="text-[11px] text-gray-500">Ages 21+ and Open tournaments</div>
+									</div>
+								</div>
+								<div class="check-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs text-transparent">
+									<i class="fas fa-check text-[10px]"></i>
+								</div>
+							</button>
+						</div>
+					</div>
+
+					<!-- STEP 2: STATE -->
+					<div id="onboardStepView2" class="onboard-step-view hidden space-y-4">
+						<div>
+							<div class="w-10 h-10 rounded-2xl bg-yellow-500/15 text-yellow-600 flex items-center justify-center text-lg font-black mb-3 border border-yellow-500/20">
+								<i class="fas fa-map-marked-alt"></i>
+							</div>
+							<h2 class="text-xl sm:text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+								Which state are you from?
+							</h2>
+							<p class="text-xs text-gray-500 mt-1 leading-relaxed">
+								Select your state or union territory across India:
+							</p>
+						</div>
+
+						<!-- Searchable State Input -->
+						<div class="relative">
+							<i class="fas fa-search absolute left-3.5 top-3.5 text-gray-400 text-xs"></i>
+							<input type="text" id="onboardingStateSearchInput" oninput="filterOnboardingStates(this.value)" placeholder="Search state or UT..." class="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+							<button type="button" onclick="clearOnboardingStateSearch()" id="btnClearStateSearch" class="hidden absolute right-3 top-3 text-gray-400 hover:text-gray-600 text-xs">
+								<i class="fas fa-times-circle"></i>
+							</button>
+						</div>
+
+						<!-- Scrollable State List -->
+						<div id="onboardingStatesList" class="max-h-60 overflow-y-auto space-y-1.5 pr-1 border border-gray-100 rounded-2xl p-1 bg-slate-50/50">
+							<!-- Injected dynamically -->
+						</div>
+					</div>
+
+					<!-- STEP 3: DISTRICT -->
+					<div id="onboardStepView3" class="onboard-step-view hidden space-y-4">
+						<div>
+							<div class="w-10 h-10 rounded-2xl bg-yellow-500/15 text-yellow-600 flex items-center justify-center text-lg font-black mb-3 border border-yellow-500/20">
+								<i class="fas fa-map-pin"></i>
+							</div>
+							<h2 class="text-xl sm:text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+								Which district are you from?
+							</h2>
+							<p class="text-xs text-gray-500 mt-1 leading-relaxed">
+								Showing districts in <span id="onboardingSelectedStateBadge" class="font-bold text-yellow-600 bg-yellow-500/15 px-2 py-0.5 rounded-full border border-yellow-500/30">Selected State</span>
+							</p>
+						</div>
+
+						<!-- Searchable District Input -->
+						<div class="relative">
+							<i class="fas fa-search absolute left-3.5 top-3.5 text-gray-400 text-xs"></i>
+							<input type="text" id="onboardingDistrictSearchInput" oninput="filterOnboardingDistricts(this.value)" placeholder="Search your district..." class="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition" />
+							<button type="button" onclick="clearOnboardingDistrictSearch()" id="btnClearDistrictSearch" class="hidden absolute right-3 top-3 text-gray-400 hover:text-gray-600 text-xs">
+								<i class="fas fa-times-circle"></i>
+							</button>
+						</div>
+
+						<!-- Scrollable District List -->
+						<div id="onboardingDistrictsList" class="max-h-60 overflow-y-auto space-y-1.5 pr-1 border border-gray-100 rounded-2xl p-1 bg-slate-50/50">
+							<!-- Injected dynamically based on selected state -->
+						</div>
+					</div>
+
+					<!-- STEP 4: SPORTS (Max 5) -->
+					<div id="onboardStepView4" class="onboard-step-view hidden space-y-4">
+						<div>
+							<div class="w-10 h-10 rounded-2xl bg-yellow-500/15 text-yellow-600 flex items-center justify-center text-lg font-black mb-3 border border-yellow-500/20">
+								<i class="fas fa-running"></i>
+							</div>
+							<h2 class="text-xl sm:text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+								Which sports are you interested in?
+							</h2>
+							<div class="flex items-center justify-between mt-1">
+								<p class="text-xs text-gray-500 leading-relaxed">
+									Select up to 5 sports:
+								</p>
+								<span id="onboardingSportsCount" class="text-[11px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+									0 of 5 selected
+								</span>
+							</div>
+						</div>
+
+						<!-- Selectable Sports Grid Cards -->
+						<div id="onboardingSportsGrid" class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+							<!-- Injected dynamically from PROSPORTS_SUPPORTED_SPORTS -->
+						</div>
+					</div>
+
+					<!-- STEP 5: NOTIFICATION PERMISSION EXPLANATION SCREEN -->
+					<div id="onboardStepView5" class="onboard-step-view hidden flex-col text-center py-2 space-y-4">
+						<div class="w-16 h-16 bg-yellow-500 text-blue-950 rounded-full flex items-center justify-center mx-auto text-2xl font-black shadow-xl animate-bounce">
+							<i class="fas fa-bell"></i>
+						</div>
+						
+						<div>
+							<h2 class="text-2xl font-black text-blue-950 uppercase italic tracking-tight">
+								Never Miss Your Next Match!
+							</h2>
+							<p class="text-xs text-gray-600 leading-relaxed max-w-xs mx-auto mt-2">
+								We'll notify you whenever new matches and tournaments are uploaded that match your age category, location and sports preferences.
+							</p>
+						</div>
+
+						<!-- Highlights -->
+						<div class="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 text-left space-y-2.5">
+							<div class="flex items-center gap-2.5 text-xs font-bold text-blue-950">
+								<i class="fas fa-check-circle text-emerald-600"></i> Instant tournament & match publishing alerts
+							</div>
+							<div class="flex items-center gap-2.5 text-xs font-bold text-blue-950">
+								<i class="fas fa-check-circle text-emerald-600"></i> Targeted strictly to your age category, location & sports
+							</div>
+							<div class="flex items-center gap-2.5 text-xs font-bold text-blue-950">
+								<i class="fas fa-check-circle text-emerald-600"></i> Zero spam, update preferences anytime
+							</div>
+						</div>
+
+						<!-- Action Buttons -->
+						<div class="space-y-2.5 pt-2">
+							<button type="button" onclick="handleEnableNotificationsPermission()" id="btnEnableNotifications" class="w-full bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+								<i class="fas fa-bell"></i>
+								<span>Enable Notifications</span>
+							</button>
+							<button type="button" onclick="handleMaybeLaterNotifications()" class="w-full bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold text-xs uppercase tracking-wider py-3 rounded-xl transition">
+								Maybe Later
+							</button>
+						</div>
+					</div>
+
+				</div>
+
+				<!-- Navigation Footer (For Steps 1 to 4) -->
+				<div id="onboardingNavFooter" class="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
+					<button type="button" id="btnOnboardingNext" onclick="handleOnboardingNext()" disabled class="w-full bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider py-3.5 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+						<span id="btnOnboardingNextText">Continue</span>
+						<i id="btnOnboardingNextIcon" class="fas fa-arrow-right"></i>
+					</button>
+				</div>
+
+			</div>
+		</div>
+
+		<!-- ================= NOTIFICATION CENTER MODAL ================= -->
+		<div id="notificationCenterModal" class="hidden fixed inset-0 z-[170] flex items-center justify-center bg-blue-950/80 backdrop-blur-md p-3 sm:p-4">
+			<div class="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-150">
+				
+				<!-- Top Header Bar -->
+				<div class="bg-blue-950 text-white p-5 flex items-center justify-between border-b border-blue-900">
+					<div class="flex items-center gap-2.5">
+						<div class="w-9 h-9 bg-yellow-500 text-blue-950 rounded-xl flex items-center justify-center text-sm font-black shadow">
+							<i class="fas fa-bell"></i>
+						</div>
+						<div>
+							<h3 class="text-base font-black uppercase italic tracking-tight flex items-center gap-2">
+								Notifications
+								<span id="notifCenterUnreadPill" class="hidden bg-yellow-500 text-blue-950 text-[10px] font-black px-2 py-0.5 rounded-full">0 New</span>
+							</h3>
+							<p class="text-[10px] text-blue-200">Personalized match & tournament alerts</p>
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						<button onclick="openManagePreferencesModal()" title="Notification Preferences" class="p-2 text-blue-200 hover:text-yellow-400 transition text-sm">
+							<i class="fas fa-sliders-h"></i>
+						</button>
+						<button onclick="closeNotificationCenterModal()" class="w-8 h-8 rounded-full bg-blue-900 hover:bg-blue-800 text-white flex items-center justify-center text-xs transition">
+							<i class="fas fa-times"></i>
+						</button>
+					</div>
+				</div>
+
+				<!-- Quick Action Subheader -->
+				<div class="px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs">
+					<span class="text-gray-500 font-bold" id="notifCountSubtitle">Showing alerts</span>
+					<div class="flex items-center gap-3">
+						<button onclick="markAllNotificationsAsRead()" class="text-blue-900 hover:text-yellow-600 font-bold transition text-[11px] uppercase tracking-wider">
+							<i class="fas fa-check-double mr-1"></i> Mark All Read
+						</button>
+						<span class="text-gray-300">|</span>
+						<button onclick="clearAllNotifications()" class="text-red-500 hover:text-red-600 font-bold transition text-[11px] uppercase tracking-wider">
+							<i class="fas fa-trash-alt mr-1"></i> Clear
+						</button>
+					</div>
+				</div>
+
+				<!-- Notification List Container -->
+				<div id="notificationCenterList" class="p-4 space-y-3 overflow-y-auto flex-1 max-h-[60vh] bg-slate-50/50">
+					<!-- Notifications injected dynamically -->
+					<div class="py-12 text-center text-gray-400 font-bold">
+						<i class="fas fa-spinner fa-spin text-2xl text-yellow-500 mb-2"></i>
+						<p class="text-xs">Loading notifications...</p>
+					</div>
+				</div>
+
+				<!-- Empty State Template -->
+				<div id="noNotificationsNotice" class="hidden p-8 text-center bg-white my-auto">
+					<div class="w-14 h-14 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center mx-auto text-xl mb-3">
+						<i class="fas fa-bell-slash text-yellow-600"></i>
+					</div>
+					<h4 class="text-sm font-black text-blue-950 uppercase italic">No Notifications Yet</h4>
+					<p class="text-xs text-gray-400 font-semibold mt-1 max-w-xs mx-auto">
+						You'll receive personalized push alerts when tournaments matching your sports & location preferences are posted.
+					</p>
+					<button onclick="openManagePreferencesModal()" class="mt-4 bg-yellow-500 hover:bg-yellow-400 text-blue-950 font-black text-xs uppercase px-4 py-2 rounded-xl shadow transition">
+						Review Preferences
+					</button>
+				</div>
+
+			</div>
+		</div>
+
+		<!-- ================= MANAGE PREFERENCES MODAL ================= -->
+		<div id="managePreferencesModal" class="hidden fixed inset-0 z-[175] flex items-center justify-center bg-blue-950/80 backdrop-blur-md p-4 overflow-y-auto">
+			<div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl relative overflow-hidden border border-gray-200 flex flex-col my-auto animate-in fade-in zoom-in duration-150">
+				
+				<!-- Header -->
+				<div class="bg-blue-950 text-white p-5 flex items-center justify-between border-b border-blue-900">
+					<div class="flex items-center gap-2.5">
+						<div class="w-9 h-9 bg-yellow-500 text-blue-950 rounded-xl flex items-center justify-center text-sm font-black shadow">
+							<i class="fas fa-sliders-h"></i>
+						</div>
+						<div>
+							<h3 class="text-base font-black uppercase italic tracking-tight">Sports Preferences</h3>
+							<p class="text-[10px] text-blue-200">Update your match & notification targeting</p>
+						</div>
+					</div>
+					<button onclick="closeManagePreferencesModal()" class="w-8 h-8 rounded-full bg-blue-900 hover:bg-blue-800 text-white flex items-center justify-center text-xs transition">
+						<i class="fas fa-times"></i>
+					</button>
+				</div>
+
+				<!-- Form Content -->
+				<div class="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+					<!-- Notification Enable Toggle Switch -->
+					<div class="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl flex items-center justify-between">
+						<div>
+							<h4 class="text-xs font-black uppercase text-blue-950 flex items-center gap-1.5">
+								<i class="fas fa-bell text-yellow-600"></i> Event Notifications
+							</h4>
+							<p class="text-[11px] text-gray-600 mt-0.5">Receive match alerts matching your preferences</p>
+						</div>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" id="manageNotifyToggle" checked class="sr-only peer" />
+							<div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-900"></div>
+						</label>
+					</div>
+
+					<!-- Age Category -->
+					<div>
+						<label class="block text-xs font-black uppercase text-blue-950 mb-2">
+							Age Category *
+						</label>
+						<div class="grid grid-cols-2 gap-2" id="manageAgeGroup">
+							<button type="button" onclick="selectManageAge('Under 16')" data-manage-age="Under 16" class="manage-age-btn border-2 border-gray-200 rounded-xl p-2.5 text-left transition">
+								<div class="text-xs font-black text-blue-950">Under 16</div>
+								<div class="text-[10px] text-gray-500">Ages 12 - 15</div>
+							</button>
+							<button type="button" onclick="selectManageAge('Under 18')" data-manage-age="Under 18" class="manage-age-btn border-2 border-gray-200 rounded-xl p-2.5 text-left transition">
+								<div class="text-xs font-black text-blue-950">Under 18</div>
+								<div class="text-[10px] text-gray-500">Ages 16 - 17</div>
+							</button>
+							<button type="button" onclick="selectManageAge('Under 21')" data-manage-age="Under 21" class="manage-age-btn border-2 border-gray-200 rounded-xl p-2.5 text-left transition">
+								<div class="text-xs font-black text-blue-950">Under 21</div>
+								<div class="text-[10px] text-gray-500">Ages 18 - 20</div>
+							</button>
+							<button type="button" onclick="selectManageAge('Open / Senior')" data-manage-age="Open / Senior" class="manage-age-btn border-2 border-gray-200 rounded-xl p-2.5 text-left transition">
+								<div class="text-xs font-black text-blue-950">Open / Senior</div>
+								<div class="text-[10px] text-gray-500">Ages 21+</div>
+							</button>
+						</div>
+						<input type="hidden" id="manageSelectedAge" value="" />
+					</div>
+
+					<!-- State & District -->
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label class="block text-xs font-black uppercase text-blue-950 mb-1.5">
+								State *
+							</label>
+							<select id="manageState" onchange="handleManageStateChange(this.value)" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">-- Select State --</option>
+							</select>
+						</div>
+						<div>
+							<label class="block text-xs font-black uppercase text-blue-950 mb-1.5">
+								District *
+							</label>
+							<select id="manageDistrict" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-blue-900 transition">
+								<option value="">-- Select District --</option>
+							</select>
+						</div>
+					</div>
+
+					<!-- Sports Preferences (Max 5) -->
+					<div>
+						<div class="flex items-center justify-between mb-2">
+							<label class="text-xs font-black uppercase text-blue-950">
+								Sports Preferences *
+							</label>
+							<span id="manageSportsCount" class="text-[11px] font-black text-yellow-600 bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-500/20">
+								0/5 sports selected
+							</span>
+						</div>
+						<div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="manageSportsList">
+							<!-- Injected dynamically -->
+						</div>
+					</div>
+
+					<!-- Error notice -->
+					<div id="manageErrorNotice" class="hidden p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-bold flex items-center gap-2">
+						<i class="fas fa-exclamation-circle"></i>
+						<span id="manageErrorMsg">Please check your inputs.</span>
+					</div>
+				</div>
+
+				<!-- Footer Actions -->
+				<div class="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
+					<button type="button" onclick="closeManagePreferencesModal()" class="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs uppercase hover:bg-gray-100 transition">
+						Cancel
+					</button>
+					<button type="button" onclick="handleUpdatePlayerPreferences()" id="btnUpdatePreferences" class="px-6 py-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-blue-950 font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2">
+						<i class="fas fa-save"></i> Save Changes
+					</button>
+				</div>
+
+			</div>
+		</div>
+
 		<!-- Configuration & Scripts -->
+		<script src="india-data.js"></script>
 		<script src="supabase.js"></script>
 		<script src="supabase-service.js"></script>
 		<script src="config.js"></script>

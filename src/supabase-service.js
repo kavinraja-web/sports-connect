@@ -497,6 +497,92 @@ const SupabaseService = {
             console.error('[SupabaseService] deleteUser error:', e);
             throw e;
         }
+    },
+
+    // 16. Save Player Preferences
+    async savePlayerPreferences(prefs) {
+        try {
+            const res = await fetch(`${this.URL}/rest/v1/player_preferences`, {
+                method: 'POST',
+                headers: {
+                    ...this.getHeaders(),
+                    'Prefer': 'resolution=merge-duplicates,return=representation'
+                },
+                body: JSON.stringify(prefs)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return data && data[0] ? data[0] : prefs;
+            }
+        } catch (e) {
+            console.warn('[SupabaseService] Cloud save failed, falling back to local sync:', e);
+        }
+        return prefs;
+    },
+
+    // 17. Get Player Preferences
+    async getPlayerPreferences(userId) {
+        try {
+            const cleanId = (userId || '').trim();
+            const res = await fetch(`${this.URL}/rest/v1/player_preferences?user_id_number=ilike.${encodeURIComponent(cleanId)}&select=*`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.length > 0) return data[0];
+            }
+        } catch (e) {
+            console.warn('[SupabaseService] Cloud fetch preferences notice:', e);
+        }
+        return null;
+    },
+
+    // 18. Get Player Notifications
+    async getPlayerNotifications(userId) {
+        try {
+            const cleanId = (userId || '').trim();
+            const res = await fetch(`${this.URL}/rest/v1/player_notifications?user_id_number=ilike.${encodeURIComponent(cleanId)}&order=created_at.desc&select=*`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) return data;
+            }
+        } catch (e) {
+            console.warn('[SupabaseService] Cloud fetch notifications notice:', e);
+        }
+        return [];
+    },
+
+    // 19. Mark Notification Read
+    async markNotificationRead(notifId, userId, markAll = false) {
+        try {
+            const cleanId = (userId || '').trim();
+            let url = `${this.URL}/rest/v1/player_notifications?user_id_number=ilike.${encodeURIComponent(cleanId)}`;
+            if (!markAll && notifId) url += `&id=eq.${notifId}`;
+            await fetch(url, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ is_read: true })
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    // 20. Clear Player Notifications
+    async clearPlayerNotifications(userId) {
+        try {
+            const cleanId = (userId || '').trim();
+            await fetch(`${this.URL}/rest/v1/player_notifications?user_id_number=ilike.${encodeURIComponent(cleanId)}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
 };
 

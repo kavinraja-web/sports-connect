@@ -100,6 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
         loadPublicEvents();
     });
 
+    // Initialize Personalized Match Notifications & Preferences for Mobile
+    initPersonalizedNotifications();
+
     // Hero Section SPORTS Button
     const sportsBtn = document.getElementById('heroSportsBtn') || document.querySelector('a[href="#register"]:last-child');
     if (sportsBtn) {
@@ -510,23 +513,21 @@ function returnToHome() {
     const header = document.querySelector('header');
     if (header) header.classList.remove('hidden');
 
+    // Always keep public events section visible on home page so events show on scroll without login
     const pubSec = document.getElementById('publicEventsSection');
+    if (pubSec) pubSec.classList.remove('hidden');
+
     const regSec = document.querySelector('#register');
     const isMobile = window.innerWidth < 768;
-
-    if (isMobile) {
-        // Mobile Homepage: strictly hide upcoming events & disciplines on homepage
-        if (pubSec) pubSec.classList.add('hidden');
-        if (regSec) regSec.classList.add('hidden');
-    } else {
-        // Desktop website: keep sections visible as before
-        if (pubSec) pubSec.classList.remove('hidden');
-        if (regSec) regSec.classList.remove('hidden');
+    if (regSec) {
+        if (isMobile) regSec.classList.add('hidden');
+        else regSec.classList.remove('hidden');
     }
 
     const footer = document.querySelector('footer');
     if (footer) footer.classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    loadPublicEvents();
 }
 
 // Scroll down smoothly to Public Sports Events Section
@@ -538,38 +539,33 @@ function scrollToPublicEvents() {
     const maraDash = document.getElementById('marathonDashboard');
     if (maraDash) maraDash.classList.add('hidden');
 
-    const pubSec = document.getElementById('publicEventsSection');
     const header = document.querySelector('header');
-    const isMobile = window.innerWidth < 768;
+    if (header) header.classList.remove('hidden');
 
-    if (isMobile) {
-        // On mobile, show separate Upcoming Sports Events & Tournaments view
-        if (pubSec) {
-            pubSec.classList.remove('hidden');
-            if (header) header.classList.add('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    } else {
-        // On desktop, keep website layout and scroll smoothly
-        if (header) header.classList.remove('hidden');
-        if (pubSec) {
-            pubSec.classList.remove('hidden');
-            pubSec.scrollIntoView({ behavior: 'smooth' });
-        }
+    const pubSec = document.getElementById('publicEventsSection');
+    if (pubSec) {
+        pubSec.classList.remove('hidden');
+        pubSec.scrollIntoView({ behavior: 'smooth' });
     }
     loadPublicEvents();
 }
 
-// Handler for Hero Sports button
+// Handler for Hero Sports button (scrolls directly to public events without requiring login)
 function handleHeroSportsClick(e) {
     if (e) e.preventDefault();
+    scrollToPublicEvents();
+}
+
+// Handler for Hero Officials button (opens Official dashboard if logged in, else Official login)
+function handleHeroOfficialsClick(e) {
+    if (e) e.preventDefault();
     const user = getActiveUser();
-    if (user) {
+    if (user && user.role === 'Official') {
         verifyUserApprovalLive(user).then(isAllowed => {
             if (isAllowed) routeUserDashboard(user);
         });
     } else {
-        scrollToPublicEvents();
+        openDirectLogin('Official');
     }
 }
 
@@ -605,6 +601,7 @@ function switchOfficialTab(tab) {
     } else if (tab === 'create') {
         if (btnCreate) btnCreate.className = activeClasses;
         if (contentCreate) contentCreate.classList.remove('hidden');
+        populateEventStateAndDistricts();
     }
 }
 
@@ -659,6 +656,9 @@ async function handleCreateEventSubmit(e) {
     const date = document.getElementById('evDate').value;
     const location = document.getElementById('evLocation').value.trim();
     const maxCapacity = document.getElementById('evCapacity').value;
+    const ageCategory = document.getElementById('evAgeCategory') ? document.getElementById('evAgeCategory').value : 'Under 18';
+    const state = document.getElementById('evState') ? document.getElementById('evState').value : '';
+    const district = document.getElementById('evDistrict') ? document.getElementById('evDistrict').value : '';
 
     const customFields = [];
     document.querySelectorAll('.custom-field-row').forEach(row => {
@@ -677,6 +677,9 @@ async function handleCreateEventSubmit(e) {
         location,
         maxCapacity: Number(maxCapacity),
         customFields,
+        ageCategory,
+        state,
+        district,
         officialId: user.idNumber || 'OFF-UNKNOWN',
         officialName: user.name,
         officialEmail: user.email
@@ -695,7 +698,7 @@ async function handleCreateEventSubmit(e) {
 
         const data = await res.json();
         if (res.ok) {
-            showInteractiveToast('Event Published!', `Tournament "${payload.name}" launched with ${customFields.length} custom fields!`, 'success');
+            showInteractiveToast('Event Published!', `Tournament "${payload.name}" launched! Targeted notifications sent to matching players.`, 'success');
             document.getElementById('createEventForm').reset();
             document.getElementById('customFieldsContainer').innerHTML = '';
             switchOfficialTab('hosted');
@@ -2152,6 +2155,8 @@ async function submitLogin() {
         setTimeout(() => {
             hideModal();
             refreshUI();
+            syncPreferencesOnLogin(user);
+            loadPlayerNotifications();
 
             if (user.status === 'pending') {
                 showInteractiveAccessModal(user, 'pending');
@@ -2807,6 +2812,1093 @@ async function testAndSaveServerUrl(overrideUrl = null) {
     }
 }
 
+// ====================================================================
+// PERSONALIZED SPORTS MATCH NOTIFICATIONS & PREFERENCES SYSTEM
+// ====================================================================
+let selectedOnboardingSports = [];
+let selectedManageSports = [];
+let cachedNotifications = [];
+
+function isMobileClient() {
+    return window.innerWidth < 768 || (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+function getStoredPlayerPreferences() {
+    try {
+        const raw = localStorage.getItem('prosports_player_preferences');
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function getEffectivePlayerId() {
+    const user = getActiveUser();
+    if (user && user.idNumber) return user.idNumber;
+    let guestId = localStorage.getItem('prosports_guest_player_id');
+    if (!guestId) {
+        guestId = 'ATH-' + Math.floor(100000 + Math.random() * 900000);
+        localStorage.setItem('prosports_guest_player_id', guestId);
+    }
+    return guestId;
+}
+
+// 1. Initialize Personalized Notifications & Preferences on Page Load
+function initPersonalizedNotifications() {
+    // Setup Native Push & Local Notification Action Listeners
+    setupNotificationListeners();
+
+    // Load Notifications for Header Badge
+    loadPlayerNotifications();
+
+    // Check for First-Time App Opening on Mobile
+    checkAndShowFirstTimeOnboarding();
+}
+
+function checkAndShowFirstTimeOnboarding() {
+    if (!isMobileClient()) return;
+    const completed = localStorage.getItem('prosports_preferences_completed');
+    if (completed !== 'true') {
+        setTimeout(() => {
+            openPlayerOnboardingModal();
+        }, 700);
+    }
+}
+
+// 5-Step Onboarding Wizard State
+let currentOnboardStep = 1;
+const onboardingPreferences = {
+    ageCategory: '',
+    state: '',
+    district: '',
+    sports: []
+};
+let onboardingStateFilter = '';
+let onboardingDistrictFilter = '';
+
+function openPlayerOnboardingModal() {
+    const modal = document.getElementById('playerOnboardingModal');
+    if (!modal) return;
+
+    // Load existing stored preferences if available to prefill
+    const existing = getStoredPlayerPreferences();
+    if (existing) {
+        if (existing.age_category) onboardingPreferences.ageCategory = existing.age_category;
+        if (existing.state) onboardingPreferences.state = existing.state;
+        if (existing.district) onboardingPreferences.district = existing.district;
+        if (Array.isArray(existing.sports)) onboardingPreferences.sports = [...existing.sports];
+    }
+    selectedOnboardingSports = onboardingPreferences.sports;
+
+    // Reset to step 1
+    goToOnboardingStep(1);
+    modal.classList.remove('hidden');
+}
+
+function closePlayerOnboardingModal() {
+    const modal = document.getElementById('playerOnboardingModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function goToOnboardingStep(step) {
+    if (step < 1 || step > 5) return;
+    currentOnboardStep = step;
+
+    const header = document.getElementById('onboardingWizardHeader');
+    const footer = document.getElementById('onboardingNavFooter');
+    const badge = document.getElementById('onboardingStepBadge');
+    const progressBar = document.getElementById('onboardingProgressBar');
+    const backBtn = document.getElementById('onboardingBackBtn');
+    const nextBtn = document.getElementById('btnOnboardingNext');
+    const nextText = document.getElementById('btnOnboardingNextText');
+    const nextIcon = document.getElementById('btnOnboardingNextIcon');
+
+    // Toggle step views visibility
+    for (let i = 1; i <= 5; i++) {
+        const view = document.getElementById(`onboardStepView${i}`);
+        if (view) {
+            if (i === step) {
+                view.classList.remove('hidden');
+            } else {
+                view.classList.add('hidden');
+            }
+        }
+    }
+
+    // Step 5: Notification Permission Explanation Screen
+    if (step === 5) {
+        if (header) header.classList.add('hidden');
+        if (footer) footer.classList.add('hidden');
+        return;
+    }
+
+    // Steps 1 - 4: Preferences Wizard Flow
+    if (header) header.classList.remove('hidden');
+    if (footer) footer.classList.remove('hidden');
+
+    if (badge) badge.textContent = `Step ${step} of 4`;
+    if (progressBar) progressBar.style.width = `${step * 25}%`;
+
+    // Back button visibility (hidden on Step 1)
+    if (backBtn) {
+        if (step === 1) {
+            backBtn.disabled = true;
+            backBtn.classList.add('opacity-0', 'pointer-events-none');
+        } else {
+            backBtn.disabled = false;
+            backBtn.classList.remove('opacity-0', 'pointer-events-none');
+        }
+    }
+
+    // Render active step content and update button state
+    if (step === 1) {
+        renderOnboardingAgeCards();
+        if (nextText) nextText.textContent = 'Continue';
+        if (nextIcon) nextIcon.className = 'fas fa-arrow-right';
+        updateNextButtonState(Boolean(onboardingPreferences.ageCategory));
+    } else if (step === 2) {
+        renderOnboardingStatesList();
+        if (nextText) nextText.textContent = 'Continue';
+        if (nextIcon) nextIcon.className = 'fas fa-arrow-right';
+        updateNextButtonState(Boolean(onboardingPreferences.state));
+    } else if (step === 3) {
+        const stateBadge = document.getElementById('onboardingSelectedStateBadge');
+        if (stateBadge) stateBadge.textContent = onboardingPreferences.state || 'Selected State';
+        renderOnboardingDistrictsList();
+        if (nextText) nextText.textContent = 'Continue';
+        if (nextIcon) nextIcon.className = 'fas fa-arrow-right';
+        updateNextButtonState(Boolean(onboardingPreferences.district));
+    } else if (step === 4) {
+        renderOnboardingSportsGrid();
+        if (nextText) nextText.textContent = 'Finish';
+        if (nextIcon) nextIcon.className = 'fas fa-check';
+        const count = onboardingPreferences.sports.length;
+        updateNextButtonState(count >= 1 && count <= 5);
+    }
+}
+
+function updateNextButtonState(isEnabled) {
+    const nextBtn = document.getElementById('btnOnboardingNext');
+    if (nextBtn) {
+        nextBtn.disabled = !isEnabled;
+    }
+}
+
+function handleOnboardingNext() {
+    if (currentOnboardStep === 1) {
+        if (!onboardingPreferences.ageCategory) return;
+        goToOnboardingStep(2);
+    } else if (currentOnboardStep === 2) {
+        if (!onboardingPreferences.state) return;
+        goToOnboardingStep(3);
+    } else if (currentOnboardStep === 3) {
+        if (!onboardingPreferences.district) return;
+        goToOnboardingStep(4);
+    } else if (currentOnboardStep === 4) {
+        if (onboardingPreferences.sports.length === 0) {
+            showInteractiveToast('Sports Selection', 'Please select at least 1 sport (up to 5).', 'warning');
+            return;
+        }
+        if (onboardingPreferences.sports.length > 5) {
+            showInteractiveToast('Sports Limit', 'You can select a maximum of 5 sports.', 'warning');
+            return;
+        }
+        finishOnboardingPreferences();
+    }
+}
+
+function handleOnboardingBack() {
+    if (currentOnboardStep > 1 && currentOnboardStep <= 4) {
+        goToOnboardingStep(currentOnboardStep - 1);
+    }
+}
+
+// STEP 1 — AGE CATEGORY HANDLERS
+function selectOnboardingAge(age) {
+    onboardingPreferences.ageCategory = age;
+    renderOnboardingAgeCards();
+    updateNextButtonState(true);
+}
+
+function renderOnboardingAgeCards() {
+    const cards = document.querySelectorAll('#onboardAgeOptions .onboard-age-card');
+    cards.forEach(card => {
+        const cardAge = card.getAttribute('data-age');
+        const iconBox = card.querySelector('.card-icon-box');
+        const check = card.querySelector('.check-indicator');
+        if (cardAge === onboardingPreferences.ageCategory) {
+            card.className = 'onboard-age-card w-full border-2 border-yellow-500 bg-yellow-500/10 rounded-2xl p-3.5 text-left transition flex items-center justify-between shadow-sm';
+            if (iconBox) iconBox.className = 'card-icon-box w-9 h-9 rounded-xl bg-yellow-500 text-blue-950 flex items-center justify-center text-xs font-black shadow transition';
+            if (check) check.className = 'check-indicator w-6 h-6 rounded-full bg-yellow-500 border-2 border-yellow-500 flex items-center justify-center text-xs text-blue-950 shadow';
+        } else {
+            card.className = 'onboard-age-card w-full border-2 border-gray-200 hover:border-yellow-500 bg-white rounded-2xl p-3.5 text-left transition flex items-center justify-between group';
+            if (iconBox) iconBox.className = 'card-icon-box w-9 h-9 rounded-xl bg-blue-50 text-blue-950 group-hover:bg-yellow-500 group-hover:text-blue-950 flex items-center justify-center text-xs font-black transition';
+            if (check) check.className = 'check-indicator w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-xs text-transparent';
+        }
+    });
+}
+
+// STEP 2 — STATE HANDLERS
+function filterOnboardingStates(query) {
+    onboardingStateFilter = (query || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('btnClearStateSearch');
+    if (clearBtn) {
+        if (onboardingStateFilter.length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+    renderOnboardingStatesList();
+}
+
+function clearOnboardingStateSearch() {
+    const input = document.getElementById('onboardingStateSearchInput');
+    if (input) input.value = '';
+    filterOnboardingStates('');
+}
+
+function selectOnboardingState(state) {
+    if (onboardingPreferences.state !== state) {
+        // Reset district if state changed
+        onboardingPreferences.district = '';
+    }
+    onboardingPreferences.state = state;
+    renderOnboardingStatesList();
+    updateNextButtonState(true);
+}
+
+function renderOnboardingStatesList() {
+    const container = document.getElementById('onboardingStatesList');
+    if (!container || typeof INDIA_STATES_AND_DISTRICTS !== 'object') return;
+
+    container.innerHTML = '';
+    const allStates = Object.keys(INDIA_STATES_AND_DISTRICTS).sort();
+    const filtered = onboardingStateFilter
+        ? allStates.filter(st => st.toLowerCase().includes(onboardingStateFilter))
+        : allStates;
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 text-center text-gray-400">
+                <i class="fas fa-search text-xl mb-1 text-gray-300"></i>
+                <p class="text-xs font-bold">No states match "${escapeHtml(onboardingStateFilter)}"</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(state => {
+        const isSelected = onboardingPreferences.state === state;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => selectOnboardingState(state);
+        btn.className = isSelected
+            ? 'w-full p-3 rounded-xl border-2 border-yellow-500 bg-yellow-500/15 text-blue-950 flex items-center justify-between text-left transition shadow-sm'
+            : 'w-full p-3 rounded-xl border border-gray-200 bg-white hover:border-yellow-500 text-gray-800 flex items-center justify-between text-left transition';
+
+        btn.innerHTML = `
+            <div class="flex items-center gap-2.5">
+                <i class="fas fa-map-marker-alt ${isSelected ? 'text-yellow-600' : 'text-gray-400'} text-xs"></i>
+                <span class="text-xs font-black">${escapeHtml(state)}</span>
+            </div>
+            <div class="w-5 h-5 rounded-full ${isSelected ? 'bg-yellow-500 text-blue-950' : 'border border-gray-300 text-transparent'} flex items-center justify-center text-[10px]">
+                <i class="fas fa-check"></i>
+            </div>
+        `;
+        container.appendChild(btn);
+    });
+}
+
+// STEP 3 — DISTRICT HANDLERS
+function filterOnboardingDistricts(query) {
+    onboardingDistrictFilter = (query || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('btnClearDistrictSearch');
+    if (clearBtn) {
+        if (onboardingDistrictFilter.length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+    renderOnboardingDistrictsList();
+}
+
+function clearOnboardingDistrictSearch() {
+    const input = document.getElementById('onboardingDistrictSearchInput');
+    if (input) input.value = '';
+    filterOnboardingDistricts('');
+}
+
+function selectOnboardingDistrict(district) {
+    onboardingPreferences.district = district;
+    renderOnboardingDistrictsList();
+    updateNextButtonState(true);
+}
+
+function renderOnboardingDistrictsList() {
+    const container = document.getElementById('onboardingDistrictsList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const selectedState = onboardingPreferences.state;
+    const districts = (selectedState && typeof INDIA_STATES_AND_DISTRICTS === 'object' && Array.isArray(INDIA_STATES_AND_DISTRICTS[selectedState]))
+        ? INDIA_STATES_AND_DISTRICTS[selectedState]
+        : [];
+
+    if (!selectedState || districts.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 text-center text-gray-400">
+                <i class="fas fa-arrow-left text-xl mb-1 text-yellow-500"></i>
+                <p class="text-xs font-bold">Please go back and select a state first.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const filtered = onboardingDistrictFilter
+        ? districts.filter(d => d.toLowerCase().includes(onboardingDistrictFilter))
+        : districts;
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 text-center text-gray-400">
+                <i class="fas fa-search text-xl mb-1 text-gray-300"></i>
+                <p class="text-xs font-bold">No districts match "${escapeHtml(onboardingDistrictFilter)}"</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(district => {
+        const isSelected = onboardingPreferences.district === district;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => selectOnboardingDistrict(district);
+        btn.className = isSelected
+            ? 'w-full p-3 rounded-xl border-2 border-yellow-500 bg-yellow-500/15 text-blue-950 flex items-center justify-between text-left transition shadow-sm'
+            : 'w-full p-3 rounded-xl border border-gray-200 bg-white hover:border-yellow-500 text-gray-800 flex items-center justify-between text-left transition';
+
+        btn.innerHTML = `
+            <div class="flex items-center gap-2.5">
+                <i class="fas fa-map-pin ${isSelected ? 'text-yellow-600' : 'text-gray-400'} text-xs"></i>
+                <span class="text-xs font-black">${escapeHtml(district)}</span>
+            </div>
+            <div class="w-5 h-5 rounded-full ${isSelected ? 'bg-yellow-500 text-blue-950' : 'border border-gray-300 text-transparent'} flex items-center justify-center text-[10px]">
+                <i class="fas fa-check"></i>
+            </div>
+        `;
+        container.appendChild(btn);
+    });
+}
+
+// STEP 4 — SPORTS HANDLERS
+function toggleOnboardingSport(sportId) {
+    const idx = onboardingPreferences.sports.indexOf(sportId);
+    if (idx >= 0) {
+        onboardingPreferences.sports.splice(idx, 1);
+    } else {
+        if (onboardingPreferences.sports.length >= 5) {
+            showInteractiveToast('Limit Reached', 'You can select up to 5 sports preferences.', 'warning');
+            return;
+        }
+        onboardingPreferences.sports.push(sportId);
+    }
+    selectedOnboardingSports = onboardingPreferences.sports;
+    renderOnboardingSportsGrid();
+    const count = onboardingPreferences.sports.length;
+    updateNextButtonState(count >= 1 && count <= 5);
+}
+
+function renderOnboardingSportsGrid() {
+    const container = document.getElementById('onboardingSportsGrid');
+    if (!container || typeof PROSPORTS_SUPPORTED_SPORTS === 'undefined') return;
+    container.innerHTML = '';
+
+    PROSPORTS_SUPPORTED_SPORTS.forEach(sport => {
+        const isSelected = onboardingPreferences.sports.includes(sport.id);
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.setAttribute('data-sport-id', sport.id);
+        card.onclick = () => toggleOnboardingSport(sport.id);
+        card.className = isSelected
+            ? 'onboard-sport-item border-2 border-yellow-500 bg-yellow-500/15 text-blue-950 rounded-2xl p-3 text-center transition flex flex-col items-center justify-center gap-1.5 shadow-sm'
+            : 'onboard-sport-item border border-gray-200 bg-white hover:border-yellow-500 text-gray-700 rounded-2xl p-3 text-center transition flex flex-col items-center justify-center gap-1.5';
+
+        card.innerHTML = `
+            <div class="w-9 h-9 rounded-xl ${isSelected ? 'bg-yellow-500 text-blue-950 shadow' : 'bg-gray-50 ' + sport.color} flex items-center justify-center text-base transition">
+                <i class="${sport.icon}"></i>
+            </div>
+            <div class="flex items-center gap-1">
+                <span class="text-xs font-black uppercase tracking-tight">${escapeHtml(sport.name)}</span>
+                ${isSelected ? '<i class="fas fa-check-circle text-yellow-600 text-[10px]"></i>' : ''}
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    const countEl = document.getElementById('onboardingSportsCount');
+    if (countEl) {
+        const count = onboardingPreferences.sports.length;
+        countEl.textContent = `${count} of 5 selected`;
+        if (count > 0) {
+            countEl.className = 'text-[11px] font-black text-yellow-600 bg-yellow-500/15 px-2.5 py-0.5 rounded-full border border-yellow-500/30';
+        } else {
+            countEl.className = 'text-[11px] font-bold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200';
+        }
+    }
+}
+
+// FINISH PREFERENCES & PERSIST TO SUPABASE (Step 4 -> Step 5)
+async function finishOnboardingPreferences() {
+    const nextBtn = document.getElementById('btnOnboardingNext');
+    const nextText = document.getElementById('btnOnboardingNextText');
+    if (nextBtn) nextBtn.disabled = true;
+    if (nextText) nextText.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i> Saving...';
+
+    const { ageCategory, state, district, sports } = onboardingPreferences;
+    const user = getActiveUser();
+    const userId = getEffectivePlayerId();
+    const email = user ? user.email : '';
+    const name = user ? user.name : 'ProSports Player';
+
+    const record = {
+        userId,
+        email,
+        name,
+        ageCategory,
+        state,
+        district,
+        sports,
+        notificationsEnabled: true
+    };
+
+    // Save locally
+    localStorage.setItem('prosports_player_preferences', JSON.stringify({
+        user_id_number: userId,
+        user_email: email,
+        user_name: name,
+        age_category: ageCategory,
+        state,
+        district,
+        sports,
+        notifications_enabled: true
+    }));
+    localStorage.setItem('prosports_preferences_completed', 'true');
+
+    // Dual-write to backend & Supabase
+    try {
+        if (window.SupabaseService && typeof window.SupabaseService.savePlayerPreferences === 'function') {
+            window.SupabaseService.savePlayerPreferences({
+                user_id_number: userId,
+                user_email: email,
+                user_name: name,
+                age_category: ageCategory,
+                state,
+                district,
+                sports,
+                notifications_enabled: true
+            }).catch(e => console.warn(e));
+        }
+
+        fetch(`${API_BASE}/player/preferences`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+        }).catch(e => console.warn(e));
+    } catch (e) {}
+
+    showInteractiveToast('Preferences Saved!', 'Now enable notifications to receive personalized match alerts.', 'success');
+
+    // Advance to Step 5: Notification Permission Explanation Screen
+    goToOnboardingStep(5);
+}
+
+// STEP 5 — NOTIFICATION PERMISSION HANDLERS
+async function handleEnableNotificationsPermission() {
+    const btn = document.getElementById('btnEnableNotifications');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Requesting Permission...';
+    }
+
+    let token = null;
+
+    try {
+        // 1. Request Capacitor Local Notifications permission
+        if (window.Capacitor && window.Capacitor.isPluginAvailable && window.Capacitor.isPluginAvailable('LocalNotifications')) {
+            const perm = await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+            console.log('[NOTIFICATIONS] LocalNotifications perm:', perm);
+        }
+
+        // 2. Request Capacitor Push Notifications permission & register device
+        if (window.Capacitor && window.Capacitor.isPluginAvailable && window.Capacitor.isPluginAvailable('PushNotifications')) {
+            const pushPerm = await window.Capacitor.Plugins.PushNotifications.requestPermissions();
+            console.log('[NOTIFICATIONS] PushNotifications perm:', pushPerm);
+            if (pushPerm && pushPerm.receive === 'granted') {
+                await window.Capacitor.Plugins.PushNotifications.register();
+            }
+        }
+    } catch (err) {
+        console.warn('[NOTIFICATIONS] Permission request notice:', err);
+    }
+
+    // Generate persistent token if none provided by native bridge yet
+    const userId = getEffectivePlayerId();
+    token = 'fcm-' + userId + '-' + Date.now();
+
+    // Register token with backend & Supabase
+    try {
+        fetch(`${API_BASE}/player/device-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, token, platform: 'android' })
+        }).catch(e => {});
+
+        const stored = getStoredPlayerPreferences();
+        if (stored) {
+            stored.notifications_enabled = true;
+            stored.device_token = token;
+            localStorage.setItem('prosports_player_preferences', JSON.stringify(stored));
+        }
+    } catch (e) {}
+
+    showInteractiveToast('Notifications Enabled!', 'You will receive match alerts tailored to your age, sports & district.', 'success');
+    closePlayerOnboardingModal();
+    loadPlayerNotifications();
+}
+
+function handleMaybeLaterNotifications() {
+    const stored = getStoredPlayerPreferences();
+    if (stored) {
+        stored.notifications_enabled = false;
+        localStorage.setItem('prosports_player_preferences', JSON.stringify(stored));
+    }
+    showInteractiveToast('Preferences Saved', 'You can enable match notifications anytime from Settings or the bell icon.', 'info');
+    closePlayerOnboardingModal();
+}
+
+// 4. Notification Center Screen
+function openNotificationCenterModal() {
+    const modal = document.getElementById('notificationCenterModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    loadPlayerNotifications();
+}
+
+function closeNotificationCenterModal() {
+    const modal = document.getElementById('notificationCenterModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function loadPlayerNotifications() {
+    const userId = getEffectivePlayerId();
+    let notifications = [];
+
+    // Try Supabase direct
+    if (window.SupabaseService && typeof window.SupabaseService.getPlayerNotifications === 'function') {
+        try {
+            notifications = await window.SupabaseService.getPlayerNotifications(userId);
+        } catch (e) {}
+    }
+
+    // Fall back to server if empty
+    if (!Array.isArray(notifications) || notifications.length === 0) {
+        try {
+            const res = await fetch(`${API_BASE}/player/notifications?userId=${encodeURIComponent(userId)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data.notifications)) notifications = data.notifications;
+            }
+        } catch (e) {}
+    }
+
+    cachedNotifications = notifications;
+    renderNotificationsList(notifications);
+}
+
+function renderNotificationsList(notifications) {
+    const list = document.getElementById('notificationCenterList');
+    const emptyNotice = document.getElementById('noNotificationsNotice');
+    const unreadPill = document.getElementById('notifCenterUnreadPill');
+    const subtitle = document.getElementById('notifCountSubtitle');
+
+    if (!list) return;
+
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+    updateNotificationBadges(unreadCount);
+
+    if (unreadPill) {
+        if (unreadCount > 0) {
+            unreadPill.textContent = `${unreadCount} New`;
+            unreadPill.classList.remove('hidden');
+        } else {
+            unreadPill.classList.add('hidden');
+        }
+    }
+
+    if (subtitle) {
+        subtitle.textContent = `${notifications.length} Alert${notifications.length === 1 ? '' : 's'}`;
+    }
+
+    if (notifications.length === 0) {
+        list.innerHTML = '';
+        if (emptyNotice) emptyNotice.classList.remove('hidden');
+        return;
+    }
+
+    if (emptyNotice) emptyNotice.classList.add('hidden');
+    list.innerHTML = '';
+
+    notifications.forEach(n => {
+        const item = document.createElement('div');
+        const isUnread = !n.is_read;
+        item.className = `p-4 rounded-2xl border transition-all cursor-pointer ${
+            isUnread 
+                ? 'bg-white border-yellow-500 shadow-md hover:border-blue-900' 
+                : 'bg-white/80 border-gray-200 hover:border-gray-300'
+        }`;
+        item.onclick = () => handleNotificationCardClick(n.id, n.event_id);
+
+        const sportIcon = getSportIconClass(n.sport);
+        const timeAgo = formatTimeAgo(n.created_at);
+
+        item.innerHTML = `
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-950 text-yellow-400 flex items-center justify-center text-base flex-shrink-0 shadow-sm">
+                    <i class="${sportIcon}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="text-xs font-black uppercase tracking-tight text-blue-950 flex items-center gap-1.5">
+                            ${n.title || '🏆 ProSports Match Alert'}
+                            ${isUnread ? '<span class="w-2 h-2 rounded-full bg-yellow-500 inline-block animate-pulse"></span>' : ''}
+                        </span>
+                        <span class="text-[10px] text-gray-400 font-bold whitespace-nowrap">${timeAgo}</span>
+                    </div>
+                    <p class="text-xs text-gray-700 font-semibold leading-snug whitespace-pre-line mb-2">${n.message}</p>
+                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 text-[11px] text-blue-900 font-black">
+                        <span class="flex items-center gap-1">
+                            <i class="fas fa-map-marker-alt text-yellow-600"></i> ${n.location || 'Official Venue'}
+                        </span>
+                        <span class="text-yellow-600 hover:text-blue-950 flex items-center gap-1">
+                            View Event <i class="fas fa-arrow-right text-[10px]"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function updateNotificationBadges(unreadCount) {
+    const mobileBadge = document.getElementById('mobileNotificationBadge');
+    const menuBadge = document.getElementById('mobileMenuNotifBadge');
+
+    if (mobileBadge) {
+        if (unreadCount > 0) {
+            mobileBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+            mobileBadge.classList.remove('hidden');
+        } else {
+            mobileBadge.classList.add('hidden');
+        }
+    }
+    if (menuBadge) {
+        if (unreadCount > 0) {
+            menuBadge.textContent = unreadCount;
+            menuBadge.classList.remove('hidden');
+        } else {
+            menuBadge.classList.add('hidden');
+        }
+    }
+}
+
+async function handleNotificationCardClick(notifId, eventId) {
+    const userId = getEffectivePlayerId();
+
+    // Mark as read
+    try {
+        fetch(`${API_BASE}/player/notifications/read`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, notificationId: notifId })
+        }).catch(e => {});
+
+        if (window.SupabaseService && typeof window.SupabaseService.markNotificationRead === 'function') {
+            window.SupabaseService.markNotificationRead(notifId, userId).catch(e => {});
+        }
+
+        const target = cachedNotifications.find(n => n.id === notifId);
+        if (target) target.is_read = true;
+        renderNotificationsList(cachedNotifications);
+    } catch (e) {}
+
+    closeNotificationCenterModal();
+
+    // Deep link to Event Details Modal
+    if (eventId) {
+        openPublicEventDetails(eventId);
+    }
+}
+
+async function markAllNotificationsAsRead() {
+    const userId = getEffectivePlayerId();
+    try {
+        fetch(`${API_BASE}/player/notifications/read`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, markAll: true })
+        }).catch(e => {});
+
+        if (window.SupabaseService && typeof window.SupabaseService.markNotificationRead === 'function') {
+            window.SupabaseService.markNotificationRead(null, userId, true).catch(e => {});
+        }
+
+        cachedNotifications.forEach(n => n.is_read = true);
+        renderNotificationsList(cachedNotifications);
+        showInteractiveToast('Notifications Updated', 'All match alerts marked as read.', 'success');
+    } catch (e) {}
+}
+
+async function clearAllNotifications() {
+    const userId = getEffectivePlayerId();
+    try {
+        fetch(`${API_BASE}/player/notifications`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, clearAll: true })
+        }).catch(e => {});
+
+        if (window.SupabaseService && typeof window.SupabaseService.clearPlayerNotifications === 'function') {
+            window.SupabaseService.clearPlayerNotifications(userId).catch(e => {});
+        }
+
+        cachedNotifications = [];
+        renderNotificationsList([]);
+        showInteractiveToast('Notifications Cleared', 'All match alert history cleared.', 'info');
+    } catch (e) {}
+}
+
+// 5. Manage Preferences Modal
+function openManagePreferencesModal() {
+    const modal = document.getElementById('managePreferencesModal');
+    if (!modal) return;
+
+    // Populate State dropdown
+    const stateSelect = document.getElementById('manageState');
+    if (stateSelect && typeof INDIA_STATES_AND_DISTRICTS === 'object') {
+        stateSelect.innerHTML = '<option value="">-- Select State --</option>';
+        Object.keys(INDIA_STATES_AND_DISTRICTS).sort().forEach(st => {
+            const opt = document.createElement('option');
+            opt.value = st;
+            opt.textContent = st;
+            stateSelect.appendChild(opt);
+        });
+    }
+
+    // Load current preferences
+    const prefs = getStoredPlayerPreferences() || {};
+    const notifyToggle = document.getElementById('manageNotifyToggle');
+    if (notifyToggle) notifyToggle.checked = prefs.notifications_enabled !== false;
+
+    if (prefs.age_category) {
+        selectManageAge(prefs.age_category);
+    } else {
+        selectManageAge('Under 18');
+    }
+
+    if (prefs.state && stateSelect) {
+        stateSelect.value = prefs.state;
+        handleManageStateChange(prefs.state);
+        if (prefs.district) {
+            const distSelect = document.getElementById('manageDistrict');
+            if (distSelect) distSelect.value = prefs.district;
+        }
+    }
+
+    selectedManageSports = Array.isArray(prefs.sports) ? [...prefs.sports] : ['Cricket', 'Football'];
+    renderManageSportsList();
+
+    modal.classList.remove('hidden');
+}
+
+function closeManagePreferencesModal() {
+    const modal = document.getElementById('managePreferencesModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function selectManageAge(age) {
+    const hiddenAge = document.getElementById('manageSelectedAge');
+    if (hiddenAge) hiddenAge.value = age;
+    document.querySelectorAll('#manageAgeGroup .manage-age-btn').forEach(btn => {
+        if (btn.getAttribute('data-manage-age') === age) {
+            btn.className = 'manage-age-btn border-2 border-yellow-500 bg-yellow-500/15 rounded-xl p-2.5 text-left transition shadow-sm';
+        } else {
+            btn.className = 'manage-age-btn border-2 border-gray-200 rounded-xl p-2.5 text-left transition';
+        }
+    });
+}
+
+function handleManageStateChange(stateVal) {
+    const distSelect = document.getElementById('manageDistrict');
+    if (!distSelect) return;
+    distSelect.innerHTML = '<option value="">-- Select District --</option>';
+    if (!stateVal || typeof INDIA_STATES_AND_DISTRICTS !== 'object' || !INDIA_STATES_AND_DISTRICTS[stateVal]) return;
+    INDIA_STATES_AND_DISTRICTS[stateVal].forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        distSelect.appendChild(opt);
+    });
+}
+
+function renderManageSportsList() {
+    const container = document.getElementById('manageSportsList');
+    if (!container || typeof PROSPORTS_SUPPORTED_SPORTS === 'undefined') return;
+    container.innerHTML = '';
+    PROSPORTS_SUPPORTED_SPORTS.forEach(sport => {
+        const isSelected = selectedManageSports.includes(sport.id);
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.setAttribute('data-manage-sport', sport.id);
+        card.onclick = () => toggleManageSport(sport.id);
+        card.className = isSelected
+            ? 'manage-sport-item border-2 border-yellow-500 bg-yellow-500/15 text-blue-950 rounded-xl p-2.5 text-center transition flex flex-col items-center justify-center gap-1 shadow-sm'
+            : 'manage-sport-item border border-gray-200 bg-gray-50 hover:border-yellow-500 text-gray-700 rounded-xl p-2.5 text-center transition flex flex-col items-center justify-center gap-1';
+
+        card.innerHTML = `
+            <i class="${sport.icon} ${sport.color} text-base"></i>
+            <span class="text-[11px] font-black uppercase tracking-tight">${sport.name}</span>
+        `;
+        container.appendChild(card);
+    });
+    updateManageSportsCountUI();
+}
+
+function toggleManageSport(sportId) {
+    const idx = selectedManageSports.indexOf(sportId);
+    if (idx >= 0) {
+        selectedManageSports.splice(idx, 1);
+    } else {
+        if (selectedManageSports.length >= 5) {
+            showInteractiveToast('Maximum 5 Sports', 'You can select up to 5 sports.', 'warning');
+            return;
+        }
+        selectedManageSports.push(sportId);
+    }
+    document.querySelectorAll('#manageSportsList .manage-sport-item').forEach(card => {
+        const id = card.getAttribute('data-manage-sport');
+        if (selectedManageSports.includes(id)) {
+            card.className = 'manage-sport-item border-2 border-yellow-500 bg-yellow-500/15 text-blue-950 rounded-xl p-2.5 text-center transition flex flex-col items-center justify-center gap-1 shadow-sm';
+        } else {
+            card.className = 'manage-sport-item border border-gray-200 bg-gray-50 hover:border-yellow-500 text-gray-700 rounded-xl p-2.5 text-center transition flex flex-col items-center justify-center gap-1';
+        }
+    });
+    updateManageSportsCountUI();
+}
+
+function updateManageSportsCountUI() {
+    const el = document.getElementById('manageSportsCount');
+    if (el) el.textContent = `${selectedManageSports.length}/5 sports selected`;
+}
+
+async function handleUpdatePlayerPreferences() {
+    const ageCategory = document.getElementById('manageSelectedAge').value.trim();
+    const state = document.getElementById('manageState').value.trim();
+    const district = document.getElementById('manageDistrict').value.trim();
+    const notifyEnabled = document.getElementById('manageNotifyToggle').checked;
+    const errBox = document.getElementById('manageErrorNotice');
+    const errMsg = document.getElementById('manageErrorMsg');
+
+    if (errBox) errBox.classList.add('hidden');
+
+    if (!ageCategory || !state || !district) {
+        if (errBox && errMsg) {
+            errMsg.textContent = 'Please choose Age Category, State, and District.';
+            errBox.classList.remove('hidden');
+        }
+        return;
+    }
+    if (selectedManageSports.length === 0) {
+        if (errBox && errMsg) {
+            errMsg.textContent = 'Please select at least 1 sport preference.';
+            errBox.classList.remove('hidden');
+        }
+        return;
+    }
+
+    const userId = getEffectivePlayerId();
+    const user = getActiveUser();
+
+    const record = {
+        userId,
+        email: user ? user.email : '',
+        name: user ? user.name : 'Player',
+        ageCategory,
+        state,
+        district,
+        sports: selectedManageSports,
+        notificationsEnabled: notifyEnabled
+    };
+
+    localStorage.setItem('prosports_player_preferences', JSON.stringify({
+        user_id_number: userId,
+        user_email: user ? user.email : '',
+        user_name: user ? user.name : 'Player',
+        age_category: ageCategory,
+        state,
+        district,
+        sports: selectedManageSports,
+        notifications_enabled: notifyEnabled
+    }));
+
+    try {
+        fetch(`${API_BASE}/player/preferences`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+        }).catch(e => {});
+
+        if (window.SupabaseService && typeof window.SupabaseService.savePlayerPreferences === 'function') {
+            window.SupabaseService.savePlayerPreferences({
+                user_id_number: userId,
+                user_email: user ? user.email : '',
+                user_name: user ? user.name : 'Player',
+                age_category: ageCategory,
+                state,
+                district,
+                sports: selectedManageSports,
+                notifications_enabled: notifyEnabled
+            }).catch(e => {});
+        }
+    } catch (e) {}
+
+    showInteractiveToast('Preferences Updated!', 'Future match notifications will target your updated criteria.', 'success');
+    closeManagePreferencesModal();
+}
+
+// 6. Deep Linking & Notification Action Listeners
+function setupNotificationListeners() {
+    if (typeof window.Capacitor === 'undefined' || !window.Capacitor.isPluginAvailable) return;
+
+    // Local notifications tap
+    if (window.Capacitor.isPluginAvailable('LocalNotifications')) {
+        try {
+            window.Capacitor.Plugins.LocalNotifications.addListener('localNotificationActionPerformed', action => {
+                console.log('[NOTIFICATIONS ACTION] Local notification tapped:', action);
+                const extra = (action && action.notification && action.notification.extra) || {};
+                const eventId = extra.eventId || (action && action.notification && action.notification.data && action.notification.data.eventId);
+                if (eventId) {
+                    openPublicEventDetails(eventId);
+                }
+            });
+        } catch (e) {}
+    }
+
+    // Push notifications tap
+    if (window.Capacitor.isPluginAvailable('PushNotifications')) {
+        try {
+            window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', action => {
+                console.log('[PUSH NOTIFICATION ACTION] Push notification tapped:', action);
+                const eventId = action && action.notification && action.notification.data && action.notification.data.eventId;
+                if (eventId) {
+                    openPublicEventDetails(eventId);
+                }
+            });
+        } catch (e) {}
+    }
+}
+
+// 7. Official Event Creation State & District Helpers
+function populateEventStateAndDistricts() {
+    if (typeof INDIA_STATES_AND_DISTRICTS !== 'object') return;
+    const stEl = document.getElementById('evState');
+    if (!stEl || stEl.children.length > 2) return;
+    stEl.innerHTML = '<option value="">-- Select State --</option>';
+    Object.keys(INDIA_STATES_AND_DISTRICTS).sort().forEach(st => {
+        const opt = document.createElement('option');
+        opt.value = st;
+        opt.textContent = st;
+        stEl.appendChild(opt);
+    });
+}
+
+function handleEventStateSelect(stateVal) {
+    const distEl = document.getElementById('evDistrict');
+    if (!distEl) return;
+    distEl.innerHTML = '<option value="">-- Select District --</option>';
+    if (!stateVal || typeof INDIA_STATES_AND_DISTRICTS !== 'object' || !INDIA_STATES_AND_DISTRICTS[stateVal]) return;
+    INDIA_STATES_AND_DISTRICTS[stateVal].forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        distEl.appendChild(opt);
+    });
+}
+
+// Helper: Sync preferences on login
+function syncPreferencesOnLogin(user) {
+    if (!user || !user.idNumber) return;
+    const stored = getStoredPlayerPreferences();
+    if (stored) {
+        stored.user_id_number = user.idNumber;
+        stored.user_email = user.email || stored.user_email;
+        stored.user_name = user.name || stored.user_name;
+        localStorage.setItem('prosports_player_preferences', JSON.stringify(stored));
+
+        try {
+            if (window.SupabaseService && typeof window.SupabaseService.savePlayerPreferences === 'function') {
+                window.SupabaseService.savePlayerPreferences(stored).catch(e => {});
+            }
+            fetch(`${API_BASE}/player/preferences`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user.idNumber,
+                    email: user.email,
+                    name: user.name,
+                    ageCategory: stored.age_category,
+                    state: stored.state,
+                    district: stored.district,
+                    sports: stored.sports,
+                    notificationsEnabled: stored.notifications_enabled !== false
+                })
+            }).catch(e => {});
+        } catch (e) {}
+    }
+}
+
+function getSportIconClass(sport) {
+    const s = (sport || '').toLowerCase();
+    if (s.includes('cricket')) return 'fas fa-baseball-ball';
+    if (s.includes('football')) return 'fas fa-futbol';
+    if (s.includes('basketball')) return 'fas fa-basketball-ball';
+    if (s.includes('volleyball')) return 'fas fa-volleyball-ball';
+    if (s.includes('running') || s.includes('track') || s.includes('athletics')) return 'fas fa-running';
+    if (s.includes('kabaddi')) return 'fas fa-users';
+    if (s.includes('badminton')) return 'fas fa-feather-alt';
+    if (s.includes('hockey')) return 'fas fa-hockey-puck';
+    if (s.includes('tennis')) return 'fas fa-table-tennis';
+    return 'fas fa-trophy';
+}
+
+function formatTimeAgo(dateStr) {
+    if (!dateStr) return 'Recent';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
 // Explicit window bindings for hybrid WebView & inline HTML onclick handlers
 if (typeof window !== 'undefined') {
     window.returnToHome = returnToHome;
@@ -2850,4 +3942,39 @@ if (typeof window !== 'undefined') {
     window.closeAccessNoticeModal = closeAccessNoticeModal;
     window.updateAthleteRegistrationStatus = updateAthleteRegistrationStatus;
     window.loadPublicEvents = loadPublicEvents;
+
+    window.handleHeroOfficialsClick = handleHeroOfficialsClick;
+
+    // Notification and Preference bindings
+    window.openPlayerOnboardingModal = openPlayerOnboardingModal;
+    window.closePlayerOnboardingModal = closePlayerOnboardingModal;
+    window.goToOnboardingStep = goToOnboardingStep;
+    window.handleOnboardingNext = handleOnboardingNext;
+    window.handleOnboardingBack = handleOnboardingBack;
+    window.selectOnboardingAge = selectOnboardingAge;
+    window.selectOnboardingState = selectOnboardingState;
+    window.filterOnboardingStates = filterOnboardingStates;
+    window.clearOnboardingStateSearch = clearOnboardingStateSearch;
+    window.selectOnboardingDistrict = selectOnboardingDistrict;
+    window.filterOnboardingDistricts = filterOnboardingDistricts;
+    window.clearOnboardingDistrictSearch = clearOnboardingDistrictSearch;
+    window.toggleOnboardingSport = toggleOnboardingSport;
+    window.finishOnboardingPreferences = finishOnboardingPreferences;
+    window.handleSavePlayerPreferences = finishOnboardingPreferences;
+    window.handleEnableNotificationsPermission = handleEnableNotificationsPermission;
+    window.handleMaybeLaterNotifications = handleMaybeLaterNotifications;
+    window.openNotificationCenterModal = openNotificationCenterModal;
+    window.closeNotificationCenterModal = closeNotificationCenterModal;
+    window.loadPlayerNotifications = loadPlayerNotifications;
+    window.handleNotificationCardClick = handleNotificationCardClick;
+    window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+    window.clearAllNotifications = clearAllNotifications;
+    window.openManagePreferencesModal = openManagePreferencesModal;
+    window.closeManagePreferencesModal = closeManagePreferencesModal;
+    window.selectManageAge = selectManageAge;
+    window.handleManageStateChange = handleManageStateChange;
+    window.toggleManageSport = toggleManageSport;
+    window.handleUpdatePlayerPreferences = handleUpdatePlayerPreferences;
+    window.populateEventStateAndDistricts = populateEventStateAndDistricts;
+    window.handleEventStateSelect = handleEventStateSelect;
 }
